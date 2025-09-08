@@ -1,0 +1,126 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Windows builds
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            executable: nvda_remote_companion.exe
+            cmake_arch: x64
+            vcvars_arch: x64
+          # Linux builds
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            executable: nvda_remote_companion
+            cmake_arch: x86_64
+            cc: gcc
+            cxx: g++
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Linux dependencies
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libspeechd-dev libbrlapi-dev
+
+    - name: Setup MSVC (Windows)
+      if: matrix.platform == 'windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.vcvars_arch }}
+
+    - name: Configure CMake (Windows)
+      if: matrix.platform == 'windows'
+      run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+    - name: Configure CMake (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        export CC="${{ matrix.cc }}"
+        export CXX="${{ matrix.cxx }}"
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+    - name: Prepare artifacts (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        mkdir -p artifacts
+        cp build/bin/${{ matrix.executable }} artifacts/
+        cp build/bin/nvdaControllerClient.dll artifacts/
+
+    - name: Prepare artifacts (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        mkdir -p artifacts
+        cp build/bin/${{ matrix.executable }} artifacts/
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nvda_remote_companion-${{ matrix.platform }}-${{ matrix.arch }}
+        path: artifacts/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    # Download all Windows artifacts
+    - name: Download Windows x64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: nvda_remote_companion-windows-x64
+        path: windows-x64/
+
+    # Download all Linux artifacts
+    - name: Download Linux x64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: nvda_remote_companion-linux-x64
+        path: linux-x64/
+
+
+    - name: Create release archives
+      run: |
+        # Create Windows archives
+        cd windows-x64
+        zip -r ../nvda_remote_companion-windows-x64.zip .
+        
+        # Create Linux archives
+        cd ../linux-x64
+        tar -czf ../nvda_remote_companion-linux-x64.tar.gz .
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          nvda_remote_companion-windows-x64.zip
+          nvda_remote_companion-linux-x64.tar.gz
