@@ -9,7 +9,7 @@ A cross-platform C++ client for connecting to NVDA Remote servers, enabling remo
 
 ### Input and Output
 - **Keyboard input forwarding**: Captures and forwards keyboard events to remote sessions (Windows only)
-- **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction Layer)
+- **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction library)
 - **Real-time communication**: Low-latency message handling for responsive remote control
 
 ### Development and Deployment
