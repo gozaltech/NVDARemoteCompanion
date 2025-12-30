@@ -14,6 +14,7 @@
 #ifdef _WIN32
     #include "MessageSender.h"
     #include "KeyboardHook.h"
+    #include "KeyboardState.h"
     #include <windows.h>
     #include <io.h>
     #include <fcntl.h>
@@ -24,10 +25,28 @@
 
 std::atomic<bool> g_shutdown(false);
 
+#ifdef _WIN32
+DWORD g_mainThreadId = 0;
+BOOL WINAPI consoleHandler(DWORD signal) {
+    if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT) {
+        DEBUG_INFO("MAIN", "Received shutdown signal, initiating graceful shutdown...");
+        g_shutdown = true;
+        if (g_mainThreadId != 0) {
+            PostThreadMessage(g_mainThreadId, WM_QUIT, 0, 0);
+            // Also post connection lost to break out of any waiting message loops
+            PostThreadMessage(g_mainThreadId, WM_CONNECTION_LOST, 0, 0);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
 struct CommandLineArgs {
     std::string host;
     int port = Config::DEFAULT_PORT;
     std::string key;
+    std::string shortcut;
     Debug::Level debugLevel = Debug::LEVEL_WARNING;
     bool debugEnabled = false;
     bool speechEnabled = true;
@@ -123,6 +142,8 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
     auto portHandler = ArgHandlers::createPortHandler();
     auto keyHandler = ArgHandlers::createStringHandler(&CommandLineArgs::key, 
         "--key requires a connection key", Config::Validator::ValidateKey);
+    auto shortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::shortcut, 
+        "--shortcut requires a key combination (e.g., ctrl+win+f11)");
     
     auto debugHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_INFO);
     auto verboseHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_VERBOSE);
@@ -138,6 +159,8 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"--port", portHandler},
         {"-k", keyHandler},
         {"--key", keyHandler},
+        {"-s", shortcutHandler},
+        {"--shortcut", shortcutHandler},
         {"-d", debugHandler},
         {"--debug", debugHandler},
         {"-v", verboseHandler},
@@ -184,7 +207,8 @@ void printHelp(const char* programName) {
     std::cout << "Connection Options:\n";
     std::cout << "  -h, --host HOST       Server hostname or IP address\n";
     std::cout << "  -p, --port PORT       Server port (default: " << Config::DEFAULT_PORT << ")\n";
-    std::cout << "  -k, --key KEY         Connection key/channel\n\n";
+    std::cout << "  -k, --key KEY         Connection key/channel\n";
+    std::cout << "  -s, --shortcut KEY    Set toggle shortcut (default: ctrl+win+f11)\n\n";
     std::cout << "Debug Options:\n";
     std::cout << "  -d, --debug           Enable debug logging (INFO level)\n";
     std::cout << "  -v, --verbose         Enable verbose debug logging\n";
@@ -222,6 +246,9 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
 
 #ifdef _WIN32
+    g_mainThreadId = GetCurrentThreadId();
+    SetConsoleCtrlHandler(consoleHandler, TRUE);
+    
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
     
@@ -251,6 +278,12 @@ int main(int argc, char* argv[]) {
         }
     }
     
+#ifdef _WIN32
+    if (!args.shortcut.empty()) {
+        KeyboardState::SetToggleShortcut(args.shortcut);
+    }
+#endif
+
     Speech::SetEnabled(args.speechEnabled);
     if (args.speechEnabled) {
         if (!Speech::Initialize()) {
@@ -264,6 +297,15 @@ int main(int argc, char* argv[]) {
     }
     
     ConnectionManager connectionManager;
+    
+#ifdef _WIN32
+    DWORD mainThreadId = GetCurrentThreadId();
+    connectionManager.SetDisconnectCallback([mainThreadId]() {
+        DEBUG_INFO("MAIN", "Connection lost callback triggered - posting message to main thread");
+        PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
+    });
+#endif
+
     bool connectionSuccess = false;
     
     if (args.hasConnectionParams) {
@@ -277,17 +319,44 @@ int main(int argc, char* argv[]) {
     }
     
 #ifdef _WIN32
-    MessageSender::SetNetworkClient(connectionManager.GetClient());
-    if (!KeyboardHook::Install()) {
-        return 1;
+    if (!args.shortcut.empty()) {
+        KeyboardState::SetToggleShortcut(args.shortcut);
+    } else {
+        std::string interactiveShortcut = connectionManager.GetShortcut();
+        if (!interactiveShortcut.empty()) {
+            KeyboardState::SetToggleShortcut(interactiveShortcut);
+        }
     }
-    
-    KeyboardHook::RunMessageLoop();
-    DEBUG_INFO("MAIN", "Message loop ended, starting cleanup");
-    
-    DEBUG_VERBOSE("MAIN", "Uninstalling keyboard hook");
-    KeyboardHook::Uninstall();
-    DEBUG_VERBOSE("MAIN", "Keyboard hook uninstalled");
+#endif
+
+#ifdef _WIN32
+    while (!g_shutdown) {
+        MessageSender::SetNetworkClient(connectionManager.GetClient());
+        if (!KeyboardHook::Install()) {
+            return 1;
+        }
+        
+        KeyboardHook::RunMessageLoop();
+        DEBUG_INFO("MAIN", "Message loop ended");
+        
+        DEBUG_VERBOSE("MAIN", "Uninstalling keyboard hook");
+        KeyboardHook::Uninstall();
+        DEBUG_VERBOSE("MAIN", "Keyboard hook uninstalled");
+        
+        if (g_shutdown) break;
+        
+        DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        
+        while (!g_shutdown) {
+             if (connectionManager.Reconnect()) {
+                 DEBUG_INFO("MAIN", "Reconnected successfully");
+                 break;
+             }
+             DEBUG_INFO("MAIN", "Reconnect failed. Retrying in 5 seconds...");
+             std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    }
 #else
     DEBUG_INFO("MAIN", "Starting input loop (Linux mode - no keyboard hook)");
     std::cout << "NVDA Remote Client running. Press Enter to quit..." << std::endl;
@@ -299,7 +368,23 @@ int main(int argc, char* argv[]) {
     });
     
     while (!g_shutdown) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        while (!g_shutdown && connectionManager.IsConnected()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        
+        if (g_shutdown) break;
+        
+        DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        
+        while (!g_shutdown) {
+             if (connectionManager.Reconnect()) {
+                 DEBUG_INFO("MAIN", "Reconnected successfully");
+                 break;
+             }
+             DEBUG_INFO("MAIN", "Reconnect failed. Retrying in 5 seconds...");
+             std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
     }
     
     if (inputThread.joinable()) {

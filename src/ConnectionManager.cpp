@@ -1,6 +1,7 @@
 #include "ConnectionManager.h"
 #include "Debug.h"
 #include "Speech.h"
+#include "Audio.h"
 #include "Config.h"
 #include <iostream>
 #include <thread>
@@ -141,6 +142,9 @@ ConnectionManager::ConnectionManager() : m_protocolHandshakeComplete(false) {
 ConnectionManager::~ConnectionManager() {
     DEBUG_INFO("CONN", "ConnectionManager destructor called");
     if (m_client) {
+        if (m_client->IsConnected()) {
+            Audio::PlayWave("disconnected");
+        }
         DEBUG_VERBOSE("CONN", "Disconnecting network client");
         m_client->Disconnect();
         DEBUG_VERBOSE("CONN", "Network client disconnected");
@@ -172,11 +176,23 @@ std::optional<ConnectionParams> ConnectionManager::PromptForConnectionParams() {
         return std::nullopt;
     }
     std::cout << "Connection key: " << params.key << "\n\n";
+
+    if (!InputHandler::GetValidatedInput("Enter toggle shortcut (default: ctrl+win+f11): ", 
+                                        params.shortcut, nullptr, Config::TrimWhitespace)) {
+        return std::nullopt;
+    }
+    if (params.shortcut.empty()) {
+        params.shortcut = "ctrl+win+f11";
+        std::cout << "Using default shortcut: " << params.shortcut << "\n\n";
+    } else {
+        std::cout << "Shortcut: " << params.shortcut << "\n\n";
+    }
     
     std::cout << "Connection Summary:\n";
     std::cout << "  Host: " << params.host << "\n";
     std::cout << "  Port: " << params.port << "\n";
-    std::cout << "  Key:  " << params.key << "\n\n";
+    std::cout << "  Key:  " << params.key << "\n";
+    std::cout << "  Shortcut: " << params.shortcut << "\n\n";
     std::cout << "Connecting to NVDA Remote server...\n";
     
     return params;
@@ -199,6 +215,8 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             DEBUG_VERBOSE("CONN", "Sending braille info");
             m_client->SendBrailleInfo();
             m_protocolHandshakeComplete = true;
+            Audio::PlayWave("connected");
+            Speech::Speak("Connected", false);
             DEBUG_INFO("CONN", "Protocol handshake complete");
         }
     }
@@ -206,10 +224,20 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
         DEBUG_VERBOSE("CONN", "Received speech cancel request");
         Speech::Stop();
     }
+    else if (messageType == Config::MSG_TYPE_TONE) {
+        int hz = j.value("hz", 440);
+        int length = j.value("length", 100);
+        Audio::PlayTone(hz, length);
+    }
+    else if (messageType == Config::MSG_TYPE_WAVE) {
+        std::string fileName = j.value("fileName", "");
+        if (!fileName.empty()) {
+             Audio::PlayWave(fileName);
+        }
+    }
     else if (messageType == Config::MSG_TYPE_SPEAK) {
         if (j.contains("sequence") && j["sequence"].is_array()) {
             std::string speechText;
-            
             for (const auto& item : j["sequence"]) {
                 if (item.is_string()) {
                     auto text = item.get<std::string>();
@@ -220,16 +248,8 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             }
             
             if (!speechText.empty()) {
-                // Remove the last space added by the loop
-                speechText.pop_back(); 
+                speechText.pop_back();
                 DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
-                
-                // USER REQUEST: "Go the don't interrupt root".
-                // We always queue speech (interrupt=false).
-                // This mimics Spri.NEXT behavior for everything, ensuring "Desktop list" 
-                // isn't cut off by "Recycle Bin".
-                // "Speedy spelling" is a known trade-off, but "skipping text" is worse.
-                // Interruption via Control key still works via MSG_TYPE_CANCEL.
                 Speech::Speak(speechText, false);
             } else {
                 DEBUG_VERBOSE("CONN", "Received empty speech sequence");
@@ -276,9 +296,10 @@ bool ConnectionManager::EstablishConnection() {
     return EstablishConnectionInternal();
 }
 
-bool ConnectionManager::EstablishConnection(std::string_view host, int port, std::string_view key) {
+bool ConnectionManager::EstablishConnection(std::string_view host, int port, std::string_view key, std::string_view shortcut) {
     auto sanitizedHost = Config::TrimWhitespace(std::string(host));
     auto sanitizedKey = Config::TrimWhitespace(std::string(key));
+    auto sanitizedShortcut = Config::TrimWhitespace(std::string(shortcut));
     
     auto validation = Config::Validator::ValidateConnectionParams(sanitizedHost, port, sanitizedKey);
     if (!validation) {
@@ -290,8 +311,26 @@ bool ConnectionManager::EstablishConnection(std::string_view host, int port, std
     m_params.host = std::move(sanitizedHost);
     m_params.port = port;
     m_params.key = std::move(sanitizedKey);
+    m_params.shortcut = std::move(sanitizedShortcut);
     
     return EstablishConnectionInternal();
+}
+
+bool ConnectionManager::Reconnect() {
+    if (m_params.host.empty()) {
+        DEBUG_ERROR("CONN", "Cannot reconnect - no connection parameters available");
+        return false;
+    }
+    Disconnect();
+    return EstablishConnectionInternal();
+}
+
+void ConnectionManager::Disconnect() {
+    DEBUG_INFO("CONN", "Disconnecting...");
+    if (m_client) {
+        m_client->Disconnect();
+    }
+    m_protocolHandshakeComplete = false;
 }
 
 bool ConnectionManager::EstablishConnectionInternal() {
@@ -333,4 +372,10 @@ bool ConnectionManager::EstablishConnectionInternal() {
 
 bool ConnectionManager::IsConnected() const {
     return m_client && m_client->IsConnected() && m_protocolHandshakeComplete;
+}
+
+void ConnectionManager::SetDisconnectCallback(std::function<void()> callback) {
+    if (m_client) {
+        m_client->SetDisconnectCallback(callback);
+    }
 }

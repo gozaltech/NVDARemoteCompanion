@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <atomic>
 
+constexpr UINT WM_CONNECTION_LOST = WM_USER + 1;
+
 extern std::atomic<bool> g_shutdown;
 
 class KeyboardHook {

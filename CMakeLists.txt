@@ -84,6 +84,7 @@ set(COMMON_SOURCES
     src/SSLClient.cpp
     src/Debug.cpp
     src/Speech.cpp
+    src/Audio.cpp
 )
 
 if(WIN32)
@@ -113,7 +114,7 @@ target_compile_definitions(nvda_remote_companion PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(nvda_remote_companion PRIVATE user32 uiautomationcore)
+    target_link_libraries(nvda_remote_companion PRIVATE user32 uiautomationcore winmm)
     target_compile_definitions(nvda_remote_companion PRIVATE
         WIN32_LEAN_AND_MEAN
         NOMINMAX

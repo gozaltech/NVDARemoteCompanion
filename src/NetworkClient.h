@@ -17,6 +17,7 @@ private:
     SSLClient m_sslClient;
     ConnectionState::StateManager m_connectionState;
     std::function<void(const std::string&)> m_messageHandler;
+    std::function<void()> m_disconnectCallback;
 
     std::queue<std::string> m_sendQueue;
     std::mutex m_sendMutex;
@@ -35,6 +36,7 @@ public:
     bool IsConnected() const { return m_connectionState.IsConnected() && m_sslClient.IsConnected(); }
     bool SendJsonMessage(const json& message);
     void SetMessageHandler(std::function<void(const std::string&)> handler);
+    void SetDisconnectCallback(std::function<void()> callback);
     void StartReceiving();
     bool SendProtocolVersion();
     bool SendJoinChannel(const std::string& channel, const std::string& connectionType = "master");
