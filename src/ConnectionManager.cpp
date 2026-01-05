@@ -248,7 +248,8 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             }
             
             if (!speechText.empty()) {
-                speechText.pop_back();
+                // Remove the last space added by the loop
+                speechText.pop_back(); 
                 DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
                 Speech::Speak(speechText, false);
             } else {
