@@ -220,9 +220,17 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             }
             
             if (!speechText.empty()) {
-                speechText.pop_back();
+                // Remove the last space added by the loop
+                speechText.pop_back(); 
                 DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
-                Speech::Speak(speechText, true);
+                
+                // USER REQUEST: "Go the don't interrupt root".
+                // We always queue speech (interrupt=false).
+                // This mimics Spri.NEXT behavior for everything, ensuring "Desktop list" 
+                // isn't cut off by "Recycle Bin".
+                // "Speedy spelling" is a known trade-off, but "skipping text" is worse.
+                // Interruption via Control key still works via MSG_TYPE_CANCEL.
+                Speech::Speak(speechText, false);
             } else {
                 DEBUG_VERBOSE("CONN", "Received empty speech sequence");
             }
