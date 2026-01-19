@@ -100,6 +100,10 @@ void KeyboardHook::RunMessageLoop() {
                 DEBUG_INFO("HOOK", "Received WM_QUIT message");
                 break;
             }
+            if (msg.message == WM_CONNECTION_LOST) {
+                DEBUG_INFO("HOOK", "Received WM_CONNECTION_LOST message, breaking loop");
+                break;
+            }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         } else {

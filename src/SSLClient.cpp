@@ -151,12 +151,12 @@ int SSLClient::Receive(char* buffer, int bufferSize) {
     int ret = mbedtls_ssl_read(&m_ssl_ctx, (unsigned char*)buffer, bufferSize);
     if (ret < 0) {
         if (ret == MBEDTLS_ERR_SSL_WANT_READ) {
-            return 0;
+            return -2; // Indication for "No data available, try again later"
         } else {
             m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
             return -1;
         }
     }
 
-    return ret;
+    return ret; // 0 means EOF (peer closed connection), > 0 means bytes read
 }

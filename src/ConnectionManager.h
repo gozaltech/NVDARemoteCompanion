@@ -9,6 +9,7 @@ struct ConnectionParams {
     std::string host;
     int port;
     std::string key;
+    std::string shortcut;
 };
 
 class ConnectionManager {
@@ -27,7 +28,11 @@ public:
     ~ConnectionManager();
 
     bool EstablishConnection();
-    bool EstablishConnection(std::string_view host, int port, std::string_view key);
+    bool EstablishConnection(std::string_view host, int port, std::string_view key, std::string_view shortcut = "");
+    bool Reconnect();
+    void Disconnect();
+    void SetDisconnectCallback(std::function<void()> callback);
     std::shared_ptr<NetworkClient> GetClient() { return m_client; }
+    std::string GetShortcut() const { return m_params.shortcut; }
     bool IsConnected() const;
 };

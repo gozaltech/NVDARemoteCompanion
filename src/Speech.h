@@ -16,5 +16,6 @@ public:
     static bool IsEnabled() { return s_enabled; }
     
     static void Speak(std::string_view text, bool interrupt = false);
+    static void SpeakSsml(std::string_view ssml, bool interrupt = false);
     static void Stop();
 };

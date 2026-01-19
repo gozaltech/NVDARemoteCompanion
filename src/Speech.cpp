@@ -47,6 +47,21 @@ void Speech::Speak(std::string_view text, bool interrupt) {
     }
 }
 
+void Speech::SpeakSsml(std::string_view ssml, bool interrupt) {
+    if (!s_initialized || !s_enabled || ssml.empty()) {
+        return;
+    }
+    
+    DEBUG_VERBOSE_F("SPEECH", "Speaking SSML: {}", ssml);
+    
+    if (ssml.data()[ssml.size()] == '\0') {
+        SRAL_SpeakSsml(ssml.data(), interrupt);
+    } else {
+        std::string ssmlStr(ssml);
+        SRAL_SpeakSsml(ssmlStr.c_str(), interrupt);
+    }
+}
+
 void Speech::Stop() {
     if (s_initialized) {
         SRAL_StopSpeech();

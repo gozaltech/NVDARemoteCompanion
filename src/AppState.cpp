@@ -2,6 +2,7 @@
 #include "KeyboardState.h"
 #include "MessageSender.h"
 #include "KeyEvent.h"
+#include "Audio.h"
 
 bool AppState::g_sendingKeys = false;
 std::chrono::steady_clock::time_point AppState::g_sendingKeysEnabledTime;
@@ -28,9 +29,11 @@ void AppState::ToggleSendingKeys() {
         KeyboardState::ClearPressedKeys();
         g_releasingKeys = false;
         g_sendingKeys = false;
+        Audio::PlayTone(440, 100);
     } else {
         g_sendingKeys = true;
         g_sendingKeysEnabledTime = std::chrono::steady_clock::now();
+        Audio::PlayTone(880, 100);
     }
 }
 

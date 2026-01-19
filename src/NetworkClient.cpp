@@ -84,6 +84,11 @@ void NetworkClient::Disconnect() {
         
         m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
         DEBUG_INFO("NETWORK", "Disconnect sequence completed successfully");
+
+        if (m_disconnectCallback) {
+            DEBUG_VERBOSE("NETWORK", "Triggering disconnect callback");
+            m_disconnectCallback();
+        }
         
     } catch (...) {
         DEBUG_ERROR("NETWORK", "Exception occurred during disconnect - continuing cleanup");
@@ -113,6 +118,10 @@ bool NetworkClient::SendJsonMessage(const json& message) {
 
 void NetworkClient::SetMessageHandler(std::function<void(const std::string&)> handler) {
     m_messageHandler = handler;
+}
+
+void NetworkClient::SetDisconnectCallback(std::function<void()> callback) {
+    m_disconnectCallback = callback;
 }
 
 void NetworkClient::SenderThreadLoop() {
@@ -176,12 +185,21 @@ void NetworkClient::ReceiverThreadLoop() {
                     }
                 }
             }
-        } else if (bytesReceived == 0) {
+        } else if (bytesReceived == -2) {
+            // WANT_READ: No data available yet
             std::this_thread::sleep_for(std::chrono::milliseconds(Config::SENDER_SLEEP_MS));
             continue;
         } else {
-            DEBUG_ERROR("NETWORK", "SSL receive failed");
+            // 0 (EOF) or -1 (Error)
+            if (bytesReceived == 0) {
+                 DEBUG_INFO("NETWORK", "SSL connection closed by peer");
+            } else {
+                 DEBUG_ERROR("NETWORK", "SSL receive failed");
+            }
             m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
+            if (m_disconnectCallback) {
+                m_disconnectCallback();
+            }
             break;
         }
     }
