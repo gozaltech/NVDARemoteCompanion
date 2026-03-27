@@ -98,6 +98,9 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
         if (j.contains("background") && j["background"].is_boolean()) {
             data.background = j["background"].get<bool>();
         }
+        if (j.contains("cycle_shortcut") && j["cycle_shortcut"].is_string()) {
+            data.cycleShortcut = j["cycle_shortcut"].get<std::string>();
+        }
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
             for (const auto& pj : j["profiles"]) {
@@ -150,6 +153,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"debug_level", "warning"},
         {"speech", true},
         {"background", false},
+        {"cycle_shortcut", "ctrl+alt+f11"},
         {"profiles", nlohmann::ordered_json::array({
             nlohmann::ordered_json({
                 {"name", "default"},
@@ -175,6 +179,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     j["debug_level"] = data.debugLevel.value_or("warning");
     j["speech"] = data.speech.value_or(true);
     j["background"] = data.background.value_or(false);
+    j["cycle_shortcut"] = data.cycleShortcut.value_or("ctrl+alt+f11");
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {

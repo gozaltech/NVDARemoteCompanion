@@ -23,6 +23,7 @@ bool KeyboardState::g_altPressed = false;
 bool KeyboardState::g_shiftPressed = false;
 
 std::vector<ShortcutConfig> KeyboardState::g_shortcuts;
+ShortcutConfig KeyboardState::g_cycleShortcut;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
@@ -131,6 +132,20 @@ ShortcutConfig KeyboardState::ParseShortcutString(const std::string& shortcut) {
         }
     }
     return sc;
+}
+
+bool KeyboardState::CheckCycleShortcut(NativeKeyType vkCode) {
+    return MatchesShortcut(g_cycleShortcut, vkCode,
+                           g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
+}
+
+void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
+    g_cycleShortcut = ParseShortcutString(shortcut);
+    if (g_cycleShortcut.key != 0) {
+        DEBUG_INFO_F("KEYS", "Cycle shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     g_cycleShortcut.ctrl, g_cycleShortcut.win, g_cycleShortcut.alt,
+                     g_cycleShortcut.shift, g_cycleShortcut.key);
+    }
 }
 
 void KeyboardState::ClearShortcuts() {

@@ -6,16 +6,18 @@ A cross-platform C++ client for connecting to NVDA Remote servers, enabling remo
 
 ### Core Functionality
 - **Cross-platform compatibility**: Native support for Windows and Linux
-- **Multiple simultaneous connections**: Connect to multiple NVDA Remote servers with per-profile keyboard shortcuts
+- **Multiple simultaneous connections**: Connect to multiple NVDA Remote servers at once
+- **Cycle shortcut**: Single shortcut to cycle between connected profiles and local machine
 - **Configuration file**: JSON-based config with profiles, auto-detected or specified via `--config`
 - **Interactive CLI**: Manage profiles and connections at runtime (connect, disconnect, add, edit, delete)
 - **Background mode** (Windows): Run without a console window, with a system tray icon
 
 ### Input and Output
 - **Keyboard input forwarding**: Captures and forwards keyboard events to remote sessions (Windows only)
-- **Per-profile toggle shortcuts**: Each connection profile has its own shortcut to activate key forwarding
+- **Cycle shortcut** (default: Ctrl+Alt+F11): Cycles through connected profiles and local machine, announcing the active target via speech
+- **Optional per-profile shortcuts**: Direct toggle shortcuts for specific profiles
 - **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction Library)
-- **Audio feedback**: Tones indicate when key forwarding is toggled
+- **Audio feedback**: Tones indicate when key forwarding is toggled (880 Hz = active, 440 Hz = local)
 - **Real-time communication**: Low-latency message handling for responsive remote control
 
 ### Development and Deployment
@@ -102,9 +104,10 @@ Where `{arch}` is `x64`.
    - Connection key (channel identifier)
 
 3. **Control the session**:
-   - **Windows**: Toggle keyboard forwarding with the configured shortcut (default: Ctrl+Win+F11)
+   - **Windows**: Press the cycle shortcut (default: Ctrl+Alt+F11) to cycle between connected profiles and local machine
    - **Linux**: Currently operates in receive-only mode
    - Speech from the remote session will be played locally
+   - The active profile name is announced via speech when cycling
    - Use interactive commands to manage connections (type `help` at the `>` prompt)
    - Press `Ctrl+C` or type `quit` to exit
 
@@ -114,10 +117,11 @@ Where `{arch}` is `x64`.
 ./nvda_remote_companion [OPTIONS]
 
 Connection Options:
-  -h, --host HOST       Server hostname or IP address
-  -p, --port PORT       Server port (default: 6837)
-  -k, --key KEY         Connection key/channel
-  -s, --shortcut KEY    Set toggle shortcut (default: ctrl+win+f11)
+  -h, --host HOST           Server hostname or IP address
+  -p, --port PORT           Server port (default: 6837)
+  -k, --key KEY             Connection key/channel
+  -s, --shortcut KEY        Set per-profile toggle shortcut (optional)
+      --cycle-shortcut KEY  Set cycle shortcut (default: ctrl+alt+f11)
 
 Debug Options:
   -d, --debug           Enable debug logging (INFO level)
@@ -135,8 +139,8 @@ Other Options:
 
 Examples:
   ./nvda_remote_companion -h example.com -k mykey
-  ./nvda_remote_companion --host 192.168.1.100 --port 6837 --key shared_session
   ./nvda_remote_companion --config myconfig.json
+  ./nvda_remote_companion --cycle-shortcut ctrl+alt+f12
   ./nvda_remote_companion --background
 ```
 
@@ -158,13 +162,13 @@ Generate a default config file with:
     "debug_level": "warning",
     "speech": true,
     "background": false,
+    "cycle_shortcut": "ctrl+alt+f11",
     "profiles": [
         {
             "name": "work-pc",
             "host": "remote.example.com",
             "port": 6837,
             "key": "my-work-key",
-            "shortcut": "ctrl+win+f11",
             "auto_connect": true
         },
         {
@@ -181,12 +185,13 @@ Generate a default config file with:
 
 #### Global Settings
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `debug_level` | string | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
-| `speech` | bool | Enable/disable speech synthesis |
-| `background` | bool | Run in background mode with system tray (Windows only) |
-| `profiles` | array | Connection profiles (see below) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `debug_level` | string | `"warning"` | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
+| `speech` | bool | `true` | Enable/disable speech synthesis |
+| `background` | bool | `false` | Run in background mode with system tray (Windows only) |
+| `cycle_shortcut` | string | `"ctrl+alt+f11"` | Shortcut to cycle between profiles and local machine |
+| `profiles` | array | `[]` | Connection profiles (see below) |
 
 #### Profile Fields
 
@@ -196,10 +201,32 @@ Generate a default config file with:
 | `host` | string | Yes | | Server hostname or IP address |
 | `port` | int | No | 6837 | Server port |
 | `key` | string | Yes | | Connection key/channel |
-| `shortcut` | string | No | ctrl+win+f11 | Toggle shortcut for keyboard forwarding |
-| `auto_connect` | bool | No | true | Connect automatically on startup |
+| `shortcut` | string | No | none | Optional direct toggle shortcut for this profile |
+| `auto_connect` | bool | No | `true` | Connect automatically on startup |
 
 Command-line arguments override config file values. When using `--host`/`--key` on the command line, a single ad-hoc profile is created and config file profiles are ignored.
+
+### Keyboard Shortcuts
+
+There are two ways to switch which remote machine receives your keyboard input:
+
+#### Cycle Shortcut (recommended)
+
+The **cycle shortcut** (default: Ctrl+Alt+F11) cycles through all connected profiles and local machine in order:
+
+**Local** → **Profile 1** → **Profile 2** → ... → **Local**
+
+Each press advances to the next target. The active profile name (or "Local") is announced via speech. This is the simplest way to manage multiple connections — no per-profile shortcuts needed.
+
+#### Per-Profile Shortcuts (optional)
+
+You can optionally assign a dedicated shortcut to individual profiles via the `shortcut` field in the config. This allows jumping directly to a specific profile:
+
+- Press the shortcut to activate that profile
+- Press it again to return to local
+- If another profile was active, keys are released on it first
+
+Both methods work together. Use the cycle shortcut for sequential switching and per-profile shortcuts for quick access to frequently used connections.
 
 ### Interactive Commands
 
@@ -236,7 +263,7 @@ Connected to home-pc
 Disconnecting work-pc...
 Disconnected work-pc
 
-> add server3 192.168.1.50 mykey 6837 ctrl+win+f10
+> add server3 192.168.1.50 mykey 6837
 Profile added: [2] server3
 
 > edit server3 auto_connect false
@@ -245,16 +272,6 @@ Profile [2] server3 updated: auto_connect = false
 > delete server3
 Profile 'server3' deleted
 ```
-
-### Multiple Connections
-
-Each profile connects to a separate NVDA Remote server/channel simultaneously. On Windows, each profile has its own toggle shortcut to activate keyboard forwarding to that specific connection.
-
-- Press a profile's shortcut to start sending keys to that remote machine
-- Press the same shortcut again to stop
-- Press a different profile's shortcut to switch key forwarding to that machine (keys are released on the previous one automatically)
-- Disconnected profiles have their shortcuts disabled automatically
-- Use `connect` / `disconnect` commands to manage connections at runtime
 
 ### Background Mode (Windows)
 
@@ -268,7 +285,7 @@ nvda_remote_companion.exe --background --host example.com --key mykey
 nvda_remote_companion.exe --config nvdaremote.json
 ```
 
-Background mode requires connection parameters (via CLI or config file) since there is no console for interactive input. Interactive commands are not available in background mode.
+Background mode requires connection parameters (via CLI or config file) since there is no console for interactive input. Interactive commands are not available in background mode. The cycle shortcut and per-profile shortcuts work normally.
 
 ## Limitations
 

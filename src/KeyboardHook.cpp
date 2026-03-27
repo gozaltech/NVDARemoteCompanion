@@ -12,6 +12,12 @@
 HHOOK KeyboardHook::g_keyboardHook = nullptr;
 
 bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
+    if (KeyboardState::CheckCycleShortcut(vkCode)) {
+        AppState::CycleProfile();
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
     int profileIndex = KeyboardState::CheckToggleShortcut(vkCode);
     if (profileIndex >= 0) {
         AppState::ToggleSendingKeys(profileIndex);

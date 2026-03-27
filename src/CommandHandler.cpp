@@ -9,6 +9,7 @@
 #include "MessageSender.h"
 #include "KeyboardState.h"
 #include "KeyboardHook.h"
+#include "AppState.h"
 #include <windows.h>
 #include <conio.h>
 extern DWORD g_mainThreadId;
@@ -90,18 +91,26 @@ void CommandHandler::RebuildShortcuts() {
 #ifdef _WIN32
     KeyboardState::ClearShortcuts();
     int shortcutIdx = 0;
-    for (auto& session : m_sessions) {
+    std::vector<int> connectedIndices;
+    std::vector<std::string> connectedNames;
+
+    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+        auto& session = m_sessions[i];
         if (session.connection && session.connection->IsConnected()) {
-            std::string sc = session.config.shortcut;
-            if (sc.empty()) sc = "ctrl+win+f11";
-            KeyboardState::SetToggleShortcutAt(shortcutIdx, sc);
+            if (!session.config.shortcut.empty()) {
+                KeyboardState::SetToggleShortcutAt(shortcutIdx, session.config.shortcut);
+            }
             MessageSender::SetNetworkClient(shortcutIdx, session.connection->GetClient());
             session.shortcutIndex = shortcutIdx;
+            connectedIndices.push_back(shortcutIdx);
+            connectedNames.push_back(session.config.name);
             shortcutIdx++;
         } else {
             session.shortcutIndex = -1;
         }
     }
+
+    AppState::SetConnectedProfiles(connectedIndices, connectedNames);
 #endif
 }
 

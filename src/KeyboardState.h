@@ -40,6 +40,7 @@ private:
     static std::vector<PressedKey> g_pressedKeyDetails;
 
     static std::vector<ShortcutConfig> g_shortcuts;
+    static ShortcutConfig g_cycleShortcut;
 
 public:
     static bool IsControlKey(NativeKeyType vkCode);
@@ -50,6 +51,8 @@ public:
     static void UpdateModifierState(NativeKeyType vkCode, bool isPressed);
 
     static int CheckToggleShortcut(NativeKeyType vkCode);
+    static bool CheckCycleShortcut(NativeKeyType vkCode);
+    static void SetCycleShortcut(const std::string& shortcut);
 
     static void SetToggleShortcut(const std::string& shortcut);
 

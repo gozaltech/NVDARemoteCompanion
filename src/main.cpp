@@ -49,6 +49,7 @@ struct CommandLineArgs {
     int port = Config::DEFAULT_PORT;
     std::string key;
     std::string shortcut;
+    std::string cycleShortcut;
     std::string configPath;
     Debug::Level debugLevel = Debug::LEVEL_WARNING;
     bool debugEnabled = false;
@@ -168,6 +169,14 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         args.configPath = argv[++i];
         return true;
     };
+    auto cycleShortcutHandler = [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
+        if (i + 1 >= argc) {
+            args.addError("--cycle-shortcut requires a key combination");
+            return false;
+        }
+        args.cycleShortcut = argv[++i];
+        return true;
+    };
     auto createConfigHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::createConfig, true);
     auto backgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::backgroundMode, true);
     auto noBackgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::noBackground, true);
@@ -181,6 +190,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"--key", keyHandler},
         {"-s", shortcutHandler},
         {"--shortcut", shortcutHandler},
+        {"--cycle-shortcut", cycleShortcutHandler},
         {"-c", configHandler},
         {"--config", configHandler},
         {"--create-config", createConfigHandler},
@@ -234,7 +244,8 @@ void printHelp(const char* programName) {
     std::cout << "  -h, --host HOST       Server hostname or IP address\n";
     std::cout << "  -p, --port PORT       Server port (default: " << Config::DEFAULT_PORT << ")\n";
     std::cout << "  -k, --key KEY         Connection key/channel\n";
-    std::cout << "  -s, --shortcut KEY    Set toggle shortcut (default: ctrl+win+f11)\n\n";
+    std::cout << "  -s, --shortcut KEY    Set per-profile toggle shortcut (default: none)\n";
+    std::cout << "      --cycle-shortcut KEY  Set cycle shortcut (default: ctrl+alt+f11)\n\n";
     std::cout << "Debug Options:\n";
     std::cout << "  -d, --debug           Enable debug logging (INFO level)\n";
     std::cout << "  -v, --verbose         Enable verbose debug logging\n";
@@ -396,6 +407,9 @@ int main(int argc, char* argv[]) {
                 cmdLine += " --shortcut \"" + args.shortcut + "\"";
             }
         }
+        if (!args.cycleShortcut.empty()) {
+            cmdLine += " --cycle-shortcut \"" + args.cycleShortcut + "\"";
+        }
         if (!args.speechEnabled) {
             cmdLine += " --no-speech";
         }
@@ -451,6 +465,13 @@ int main(int argc, char* argv[]) {
     CommandHandler cmdHandler(configPath, cfg);
 
 #ifdef _WIN32
+    {
+        std::string cycleSc = args.cycleShortcut;
+        if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
+        if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
+        KeyboardState::SetCycleShortcut(cycleSc);
+    }
+
     DWORD mainThreadId = GetCurrentThreadId();
     cmdHandler.SetDisconnectCallbackFactory([mainThreadId](ConnectionManager& cm) {
         cm.SetDisconnectCallback([mainThreadId]() {
