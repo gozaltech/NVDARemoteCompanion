@@ -16,6 +16,7 @@
     #include "MessageSender.h"
     #include "KeyboardHook.h"
     #include "KeyboardState.h"
+    #include "TrayIcon.h"
     #include <windows.h>
     #include <io.h>
     #include <fcntl.h>
@@ -53,6 +54,8 @@ struct CommandLineArgs {
     bool speechEnabled = true;
     bool showHelp = false;
     bool createConfig = false;
+    bool backgroundMode = false;
+    bool noBackground = false;
     bool hasConnectionParams = false;
     bool portSet = false;
     
@@ -165,6 +168,8 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         return true;
     };
     auto createConfigHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::createConfig, true);
+    auto backgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::backgroundMode, true);
+    auto noBackgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::noBackground, true);
 
     std::map<std::string, std::function<bool(CommandLineArgs&, int&, int, char**)>> argHandlers = {
         {"-h", hostHandler},
@@ -178,6 +183,9 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"-c", configHandler},
         {"--config", configHandler},
         {"--create-config", createConfigHandler},
+        {"-b", backgroundHandler},
+        {"--background", backgroundHandler},
+        {"--no-background", noBackgroundHandler},
         {"-d", debugHandler},
         {"--debug", debugHandler},
         {"-v", verboseHandler},
@@ -235,6 +243,9 @@ void printHelp(const char* programName) {
     std::cout << "      --create-config   Create a default config file and exit\n\n";
     std::cout << "Other Options:\n";
     std::cout << "      --no-speech       Disable speech synthesis\n";
+#ifdef _WIN32
+    std::cout << "  -b, --background      Run without console window (system tray only)\n";
+#endif
     std::cout << "      --help            Show this help message\n\n";
     std::cout << "Config File:\n";
     std::cout << "  The app looks for nvdaremote.json in:\n";
@@ -277,10 +288,10 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
     g_mainThreadId = GetCurrentThreadId();
     SetConsoleCtrlHandler(consoleHandler, TRUE);
-    
+
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
-    
+
     std::locale::global(std::locale(""));
 #endif
 
@@ -327,6 +338,9 @@ int main(int argc, char* argv[]) {
         if (cfg.speech.has_value() && !*cfg.speech) {
             args.speechEnabled = false;
         }
+        if (cfg.background.has_value() && *cfg.background && !args.backgroundMode && !args.noBackground) {
+            args.backgroundMode = true;
+        }
         if (cfg.debugLevel && !args.debugEnabled) {
             std::string level = *cfg.debugLevel;
             if (level == "info") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_INFO; }
@@ -336,6 +350,54 @@ int main(int argc, char* argv[]) {
     } else if (!args.configPath.empty()) {
         std::cerr << "Warning: Config file not found: " << args.configPath << std::endl;
     }
+
+#ifdef _WIN32
+    if (args.backgroundMode) {
+        if (!args.hasConnectionParams || args.host.empty() || args.key.empty()) {
+            std::cerr << "Error: Background mode requires host and key (via --host/--key or config file)" << std::endl;
+            return 1;
+        }
+        std::string cmdLine;
+        char exePath[MAX_PATH];
+        GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+        cmdLine = "\"" + std::string(exePath) + "\"";
+        cmdLine += " --no-background";
+        cmdLine += " --host \"" + args.host + "\"";
+        cmdLine += " --port " + std::to_string(args.port);
+        cmdLine += " --key \"" + args.key + "\"";
+        if (!args.shortcut.empty()) {
+            cmdLine += " --shortcut \"" + args.shortcut + "\"";
+        }
+        if (!args.speechEnabled) {
+            cmdLine += " --no-speech";
+        }
+        if (args.debugEnabled) {
+            if (args.debugLevel == Debug::LEVEL_TRACE) cmdLine += " --trace";
+            else if (args.debugLevel == Debug::LEVEL_VERBOSE) cmdLine += " --verbose";
+            else cmdLine += " --debug";
+        }
+
+        STARTUPINFOA si = {};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi = {};
+        if (CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, FALSE,
+                           DETACHED_PROCESS,
+                           nullptr, nullptr, &si, &pi)) {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            std::cout << "Running in background (PID " << pi.dwProcessId << ")" << std::endl;
+            return 0;
+        } else {
+            std::cerr << "Error: Failed to start background process" << std::endl;
+            return 1;
+        }
+    }
+#else
+    if (args.backgroundMode) {
+        std::cerr << "Warning: Background mode is only supported on Windows, ignoring" << std::endl;
+        args.backgroundMode = false;
+    }
+#endif
 
     Debug::SetEnabled(args.debugEnabled);
     Debug::SetLevel(args.debugLevel);
@@ -400,32 +462,57 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifdef _WIN32
+    bool isTrayMode = (GetConsoleWindow() == nullptr);
+    if (isTrayMode) {
+        if (!TrayIcon::Create()) {
+            DEBUG_ERROR("MAIN", "Failed to create tray icon");
+            return 1;
+        }
+        TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Connected");
+    }
+
     while (!g_shutdown) {
         MessageSender::SetNetworkClient(connectionManager.GetClient());
         if (!KeyboardHook::Install()) {
+            if (isTrayMode) TrayIcon::Destroy();
             return 1;
         }
-        
-        KeyboardHook::RunMessageLoop();
+
+        if (isTrayMode) {
+            TrayIcon::RunMessageLoop();
+        } else {
+            KeyboardHook::RunMessageLoop();
+        }
         DEBUG_INFO("MAIN", "Message loop ended");
-        
+
         DEBUG_VERBOSE("MAIN", "Uninstalling keyboard hook");
         KeyboardHook::Uninstall();
         DEBUG_VERBOSE("MAIN", "Keyboard hook uninstalled");
-        
+
         if (g_shutdown) break;
-        
+
+        if (isTrayMode) {
+            TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Reconnecting...");
+        }
+
         DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
-        
+
         while (!g_shutdown) {
              if (connectionManager.Reconnect()) {
                  DEBUG_INFO("MAIN", "Reconnected successfully");
+                 if (isTrayMode) {
+                     TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Connected");
+                 }
                  break;
              }
              DEBUG_INFO("MAIN", "Reconnect failed. Retrying in 5 seconds...");
              std::this_thread::sleep_for(std::chrono::seconds(5));
         }
+    }
+
+    if (isTrayMode) {
+        TrayIcon::Destroy();
     }
 #else
     DEBUG_INFO("MAIN", "Starting input loop (Linux mode - no keyboard hook)");

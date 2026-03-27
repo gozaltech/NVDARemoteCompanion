@@ -9,6 +9,7 @@ struct ConfigFileData {
     std::optional<std::string> shortcut;
     std::optional<std::string> debugLevel;
     std::optional<bool> speech;
+    std::optional<bool> background;
 };
 
 namespace ConfigFile {

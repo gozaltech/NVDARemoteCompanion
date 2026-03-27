@@ -90,6 +90,9 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
         if (j.contains("speech") && j["speech"].is_boolean()) {
             data.speech = j["speech"].get<bool>();
         }
+        if (j.contains("background") && j["background"].is_boolean()) {
+            data.background = j["background"].get<bool>();
+        }
 
         DEBUG_INFO("CONFIG", "Loaded config from: " + path);
     } catch (const nlohmann::json::exception& e) {
@@ -113,7 +116,8 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"key", ""},
         {"shortcut", "ctrl+win+f11"},
         {"debug_level", "warning"},
-        {"speech", true}
+        {"speech", true},
+        {"background", false}
     };
 
     std::ofstream file(path);

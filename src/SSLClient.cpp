@@ -88,6 +88,8 @@ bool SSLClient::Connect(const std::string& host, int port) {
 
     DEBUG_INFO_F("SSL", "TCP connection established to {}:{}", host, port);
 
+    mbedtls_net_set_nonblock(&m_net_ctx);
+
     if (!InitializeSSL()) {
         mbedtls_net_free(&m_net_ctx);
         m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
