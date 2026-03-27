@@ -85,6 +85,7 @@ set(COMMON_SOURCES
     src/Debug.cpp
     src/Speech.cpp
     src/Audio.cpp
+    src/ConfigFile.cpp
 )
 
 if(WIN32)

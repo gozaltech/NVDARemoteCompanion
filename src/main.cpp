@@ -7,6 +7,7 @@
 #include <vector>
 #include <functional>
 #include "ConnectionManager.h"
+#include "ConfigFile.h"
 #include "Debug.h"
 #include "Speech.h"
 #include "Config.h"
@@ -33,7 +34,6 @@ BOOL WINAPI consoleHandler(DWORD signal) {
         g_shutdown = true;
         if (g_mainThreadId != 0) {
             PostThreadMessage(g_mainThreadId, WM_QUIT, 0, 0);
-            // Also post connection lost to break out of any waiting message loops
             PostThreadMessage(g_mainThreadId, WM_CONNECTION_LOST, 0, 0);
         }
         return TRUE;
@@ -47,11 +47,14 @@ struct CommandLineArgs {
     int port = Config::DEFAULT_PORT;
     std::string key;
     std::string shortcut;
+    std::string configPath;
     Debug::Level debugLevel = Debug::LEVEL_WARNING;
     bool debugEnabled = false;
     bool speechEnabled = true;
     bool showHelp = false;
+    bool createConfig = false;
     bool hasConnectionParams = false;
+    bool portSet = false;
     
     std::vector<std::string> errors;
     
@@ -108,6 +111,7 @@ namespace ArgHandlers {
                     return false;
                 }
                 args.port = port;
+                args.portSet = true;
                 args.hasConnectionParams = true;
                 return true;
             } catch (const std::exception&) {
@@ -152,6 +156,16 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
     auto noSpeechHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::speechEnabled, false);
     auto helpHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::showHelp, true);
     
+    auto configHandler = [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
+        if (i + 1 >= argc) {
+            args.addError("--config requires a file path");
+            return false;
+        }
+        args.configPath = argv[++i];
+        return true;
+    };
+    auto createConfigHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::createConfig, true);
+
     std::map<std::string, std::function<bool(CommandLineArgs&, int&, int, char**)>> argHandlers = {
         {"-h", hostHandler},
         {"--host", hostHandler},
@@ -161,6 +175,9 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"--key", keyHandler},
         {"-s", shortcutHandler},
         {"--shortcut", shortcutHandler},
+        {"-c", configHandler},
+        {"--config", configHandler},
+        {"--create-config", createConfigHandler},
         {"-d", debugHandler},
         {"--debug", debugHandler},
         {"-v", verboseHandler},
@@ -213,9 +230,21 @@ void printHelp(const char* programName) {
     std::cout << "  -d, --debug           Enable debug logging (INFO level)\n";
     std::cout << "  -v, --verbose         Enable verbose debug logging\n";
     std::cout << "  -t, --trace           Enable trace debug logging (most detailed)\n\n";
+    std::cout << "Config File Options:\n";
+    std::cout << "  -c, --config PATH     Path to config file (default: auto-detect)\n";
+    std::cout << "      --create-config   Create a default config file and exit\n\n";
     std::cout << "Other Options:\n";
     std::cout << "      --no-speech       Disable speech synthesis\n";
     std::cout << "      --help            Show this help message\n\n";
+    std::cout << "Config File:\n";
+    std::cout << "  The app looks for nvdaremote.json in:\n";
+    std::cout << "    1. Current directory\n";
+#ifdef _WIN32
+    std::cout << "    2. %APPDATA%\\NVDARemoteCompanion\\\n";
+#else
+    std::cout << "    2. ~/.config/NVDARemoteCompanion/\n";
+#endif
+    std::cout << "  Command-line arguments override config file values.\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " -h example.com -k mykey\n";
     std::cout << "  " << programName << " --host 192.168.1.100 --port " << Config::DEFAULT_PORT << " --key shared_session\n";
@@ -266,7 +295,48 @@ int main(int argc, char* argv[]) {
         args.printErrors();
         return 1;
     }
-    
+
+    if (args.createConfig) {
+        std::string path = args.configPath.empty() ? "nvdaremote.json" : args.configPath;
+        if (ConfigFile::CreateDefault(path)) {
+            std::cout << "Default config file created: " << path << std::endl;
+            return 0;
+        } else {
+            std::cerr << "Error: Failed to create config file: " << path << std::endl;
+            return 1;
+        }
+    }
+
+    std::string configPath = ConfigFile::FindConfigFile(args.configPath);
+    if (!configPath.empty()) {
+        auto cfg = ConfigFile::Load(configPath);
+        if (cfg.host && args.host.empty()) {
+            args.host = *cfg.host;
+            if (!args.host.empty()) args.hasConnectionParams = true;
+        }
+        if (cfg.port && !args.portSet) {
+            args.port = *cfg.port;
+        }
+        if (cfg.key && args.key.empty()) {
+            args.key = *cfg.key;
+            if (!args.key.empty()) args.hasConnectionParams = true;
+        }
+        if (cfg.shortcut && args.shortcut.empty()) {
+            args.shortcut = *cfg.shortcut;
+        }
+        if (cfg.speech.has_value() && !*cfg.speech) {
+            args.speechEnabled = false;
+        }
+        if (cfg.debugLevel && !args.debugEnabled) {
+            std::string level = *cfg.debugLevel;
+            if (level == "info") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_INFO; }
+            else if (level == "verbose") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_VERBOSE; }
+            else if (level == "trace") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_TRACE; }
+        }
+    } else if (!args.configPath.empty()) {
+        std::cerr << "Warning: Config file not found: " << args.configPath << std::endl;
+    }
+
     Debug::SetEnabled(args.debugEnabled);
     Debug::SetLevel(args.debugLevel);
     
