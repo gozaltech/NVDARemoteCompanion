@@ -6,10 +6,15 @@ A cross-platform C++ client for connecting to NVDA Remote servers, enabling remo
 
 ### Core Functionality
 - **Cross-platform compatibility**: Native support for Windows and Linux
+- **Multiple simultaneous connections**: Connect to multiple NVDA Remote servers with per-profile keyboard shortcuts
+- **Configuration file**: JSON-based config with profiles, auto-detected or specified via `--config`
+- **Background mode** (Windows): Run without a console window, with a system tray icon
 
 ### Input and Output
 - **Keyboard input forwarding**: Captures and forwards keyboard events to remote sessions (Windows only)
-- **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction library)
+- **Per-profile toggle shortcuts**: Each connection profile has its own shortcut to activate key forwarding
+- **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction Library)
+- **Audio feedback**: Tones indicate when key forwarding is toggled
 - **Real-time communication**: Low-latency message handling for responsive remote control
 
 ### Development and Deployment
@@ -96,35 +101,122 @@ Where `{arch}` is `x64`.
    - Connection key (channel identifier)
 
 3. **Control the session**:
-   - **Windows**: Keyboard input will be captured and forwarded to the remote session by pressing ctrl+windows+f11
+   - **Windows**: Toggle keyboard forwarding with the configured shortcut (default: Ctrl+Win+F11)
    - **Linux**: Currently operates in receive-only mode
    - Speech from the remote session will be played locally
    - Press `Ctrl+C` to exit gracefully
 
 ### Command Line Options
 
-```bash
-./nvda_remote_companion [options]
+```
+./nvda_remote_companion [OPTIONS]
 
 Connection Options:
   -h, --host HOST       Server hostname or IP address
-  -p, --port PORT       Server port (default: 6837)  
+  -p, --port PORT       Server port (default: 6837)
   -k, --key KEY         Connection key/channel
+  -s, --shortcut KEY    Set toggle shortcut (default: ctrl+win+f11)
 
 Debug Options:
   -d, --debug           Enable debug logging (INFO level)
   -v, --verbose         Enable verbose debug logging
   -t, --trace           Enable trace debug logging (most detailed)
 
+Config File Options:
+  -c, --config PATH     Path to config file (default: auto-detect)
+      --create-config   Create a default config file and exit
+
 Other Options:
       --no-speech       Disable speech synthesis
+  -b, --background      Run without console window, system tray only (Windows)
       --help            Show help message
 
 Examples:
   ./nvda_remote_companion -h example.com -k mykey
   ./nvda_remote_companion --host 192.168.1.100 --port 6837 --key shared_session
-  ./nvda_remote_companion --verbose --no-speech
+  ./nvda_remote_companion --config myconfig.json
+  ./nvda_remote_companion --background
 ```
+
+### Configuration File
+
+The application looks for `nvdaremote.json` in:
+1. Current directory
+2. `%APPDATA%\NVDARemoteCompanion\` (Windows) or `~/.config/NVDARemoteCompanion/` (Linux)
+
+Generate a default config file with:
+```bash
+./nvda_remote_companion --create-config
+```
+
+#### Config File Format
+
+```json
+{
+    "debug_level": "warning",
+    "speech": true,
+    "background": false,
+    "profiles": [
+        {
+            "name": "work-pc",
+            "host": "remote.example.com",
+            "port": 6837,
+            "key": "my-work-key",
+            "shortcut": "ctrl+win+f11"
+        },
+        {
+            "name": "home-pc",
+            "host": "home.example.com",
+            "port": 6837,
+            "key": "my-home-key",
+            "shortcut": "ctrl+win+f12"
+        }
+    ]
+}
+```
+
+#### Config Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `debug_level` | string | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
+| `speech` | bool | Enable/disable speech synthesis |
+| `background` | bool | Run in background mode with system tray (Windows only) |
+| `profiles` | array | Connection profiles (see below) |
+
+#### Profile Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | No | Display name for the profile |
+| `host` | string | Yes | Server hostname or IP address |
+| `port` | int | No | Server port (default: 6837) |
+| `key` | string | Yes | Connection key/channel |
+| `shortcut` | string | No | Toggle shortcut (default: ctrl+win+f11) |
+
+Command-line arguments override config file values. When using `--host`/`--key` on the command line, a single ad-hoc profile is created and config file profiles are ignored.
+
+### Multiple Connections
+
+Each profile connects to a separate NVDA Remote server/channel simultaneously. On Windows, each profile has its own toggle shortcut to activate keyboard forwarding to that specific connection.
+
+- Press a profile's shortcut to start sending keys to that remote machine
+- Press the same shortcut again to stop
+- Press a different profile's shortcut to switch key forwarding to that machine (keys are released on the previous one automatically)
+
+### Background Mode (Windows)
+
+Background mode runs the application without a console window. A system tray icon provides an exit option.
+
+```bash
+# Via command line
+nvda_remote_companion.exe --background --host example.com --key mykey
+
+# Via config file (set "background": true)
+nvda_remote_companion.exe --config nvdaremote.json
+```
+
+Background mode requires connection parameters (via CLI or config file) since there is no console for interactive input.
 
 ## Limitations
 
@@ -132,9 +224,7 @@ Examples:
 
 #### Linux Platform
 - **No keyboard input forwarding**: Linux implementation currently supports receive-only mode
-
-#### General Limitations
-- **Single connection**: Only one active connection supported at a time
+- **No background mode**: Background mode with system tray is Windows only
 
 ## Contributing
 
@@ -153,7 +243,6 @@ We welcome contributions to improve NVDA Remote Companion:
 - **Protocol enhancements**: Support for additional NVDA Remote features
 - **Performance optimization**: Memory usage and connection reliability improvements
 - **Platform support**: macOS port or additional Linux distributions
-- **Multiple connections**: maintain multiple simultaneous connections and switch between them with a shortcut
 
 ## Support
 
