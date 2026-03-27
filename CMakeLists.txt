@@ -85,6 +85,8 @@ set(COMMON_SOURCES
     src/Debug.cpp
     src/Speech.cpp
     src/Audio.cpp
+    src/ConfigFile.cpp
+    src/CommandHandler.cpp
 )
 
 if(WIN32)
@@ -94,6 +96,7 @@ if(WIN32)
         src/EventChecker.cpp
         src/MessageSender.cpp
         src/KeyboardHook.cpp
+        src/TrayIcon.cpp
     )
 endif()
 
@@ -114,7 +117,7 @@ target_compile_definitions(nvda_remote_companion PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(nvda_remote_companion PRIVATE user32 uiautomationcore winmm)
+    target_link_libraries(nvda_remote_companion PRIVATE user32 uiautomationcore winmm shell32)
     target_compile_definitions(nvda_remote_companion PRIVATE
         WIN32_LEAN_AND_MEAN
         NOMINMAX

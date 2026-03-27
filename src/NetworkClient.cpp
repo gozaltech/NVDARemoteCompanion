@@ -61,15 +61,16 @@ void NetworkClient::Disconnect() {
     DEBUG_INFO("NETWORK", "Starting disconnect sequence");
     
     try {
-        DEBUG_VERBOSE("NETWORK", "Stopping worker threads");
-        m_threadPool.StopAll();
-        
+        m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
         DEBUG_VERBOSE("NETWORK", "Notifying sender thread");
         m_sendCondition.notify_all();
-        
+
         DEBUG_VERBOSE("NETWORK", "Closing SSL connection");
         m_sslClient.Disconnect();
-        
+
+        DEBUG_VERBOSE("NETWORK", "Stopping worker threads");
+        m_threadPool.StopAll();
+
         DEBUG_VERBOSE("NETWORK", "Clearing send queue");
         {
             std::lock_guard<std::mutex> lock(m_sendMutex);
@@ -81,8 +82,7 @@ void NetworkClient::Disconnect() {
                 DEBUG_VERBOSE_F("NETWORK", "Cleared {} unsent messages from queue", queueSize);
             }
         }
-        
-        m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
+
         DEBUG_INFO("NETWORK", "Disconnect sequence completed successfully");
 
         if (m_disconnectCallback) {
@@ -92,7 +92,6 @@ void NetworkClient::Disconnect() {
         
     } catch (...) {
         DEBUG_ERROR("NETWORK", "Exception occurred during disconnect - continuing cleanup");
-        m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
     }
 }
 
@@ -186,11 +185,9 @@ void NetworkClient::ReceiverThreadLoop() {
                 }
             }
         } else if (bytesReceived == -2) {
-            // WANT_READ: No data available yet
             std::this_thread::sleep_for(std::chrono::milliseconds(Config::SENDER_SLEEP_MS));
             continue;
         } else {
-            // 0 (EOF) or -1 (Error)
             if (bytesReceived == 0) {
                  DEBUG_INFO("NETWORK", "SSL connection closed by peer");
             } else {

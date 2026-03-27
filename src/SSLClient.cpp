@@ -88,6 +88,8 @@ bool SSLClient::Connect(const std::string& host, int port) {
 
     DEBUG_INFO_F("SSL", "TCP connection established to {}:{}", host, port);
 
+    mbedtls_net_set_nonblock(&m_net_ctx);
+
     if (!InitializeSSL()) {
         mbedtls_net_free(&m_net_ctx);
         m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
@@ -151,12 +153,12 @@ int SSLClient::Receive(char* buffer, int bufferSize) {
     int ret = mbedtls_ssl_read(&m_ssl_ctx, (unsigned char*)buffer, bufferSize);
     if (ret < 0) {
         if (ret == MBEDTLS_ERR_SSL_WANT_READ) {
-            return -2; // Indication for "No data available, try again later"
+            return -2;
         } else {
             m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
             return -1;
         }
     }
 
-    return ret; // 0 means EOF (peer closed connection), > 0 means bytes read
+    return ret;
 }

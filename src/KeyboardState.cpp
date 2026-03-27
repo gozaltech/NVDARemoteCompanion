@@ -6,7 +6,7 @@
 
 #ifdef _WIN32
     #define CTRL_KEY_1 VK_CONTROL
-    #define CTRL_KEY_2 VK_LCONTROL  
+    #define CTRL_KEY_2 VK_LCONTROL
     #define CTRL_KEY_3 VK_RCONTROL
     #define WIN_KEY_1  VK_LWIN
     #define WIN_KEY_2  VK_RWIN
@@ -22,13 +22,8 @@ bool KeyboardState::g_winPressed = false;
 bool KeyboardState::g_altPressed = false;
 bool KeyboardState::g_shiftPressed = false;
 
-// Default: Ctrl + Win + F11
-bool KeyboardState::g_targetCtrl = true;
-bool KeyboardState::g_targetWin = true;
-bool KeyboardState::g_targetAlt = false;
-bool KeyboardState::g_targetShift = false;
-NativeKeyType KeyboardState::g_targetKey = VK_F11;
-
+std::vector<ShortcutConfig> KeyboardState::g_shortcuts;
+ShortcutConfig KeyboardState::g_cycleShortcut;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
@@ -59,44 +54,42 @@ void KeyboardState::UpdateModifierState(NativeKeyType vkCode, bool isPressed) {
     if (IsShiftKey(vkCode)) g_shiftPressed = isPressed;
 }
 
-bool KeyboardState::IsToggleShortcut(NativeKeyType vkCode) {
+static bool MatchesShortcut(const ShortcutConfig& sc, NativeKeyType vkCode,
+                            bool ctrl, bool win, bool alt, bool shift) {
+    if (sc.key == 0) return false;
+    if (vkCode != sc.key) return false;
+    return (ctrl == sc.ctrl) && (win == sc.win) && (alt == sc.alt) && (shift == sc.shift);
+}
+
+int KeyboardState::CheckToggleShortcut(NativeKeyType vkCode) {
 #ifdef _WIN32
-    // Only trigger if the non-modifier key matches target
-    if (vkCode != g_targetKey) return false;
-    
-    return (g_ctrlPressed == g_targetCtrl) &&
-           (g_winPressed == g_targetWin) &&
-           (g_altPressed == g_targetAlt) &&
-           (g_shiftPressed == g_targetShift);
-#else
-    return g_ctrlPressed && g_winPressed && vkCode == 0x4f;
+    for (int i = 0; i < static_cast<int>(g_shortcuts.size()); i++) {
+        if (MatchesShortcut(g_shortcuts[i], vkCode,
+                            g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed)) {
+            return i;
+        }
+    }
 #endif
+    return -1;
 }
 
-void KeyboardState::ResetModifiers() {
-    g_ctrlPressed = false;
-    g_winPressed = false;
-    g_altPressed = false;
-    g_shiftPressed = false;
-}
-
-NativeKeyType ParseKey(const std::string& keyName) {
+static NativeKeyType ParseKey(const std::string& keyName) {
     std::string k = keyName;
     std::transform(k.begin(), k.end(), k.begin(), ::tolower);
-    
-    if (k.rfind("f", 0) == 0 && k.length() > 1) { // Starts with f
+
+    if (k.rfind("f", 0) == 0 && k.length() > 1) {
          try {
              int num = std::stoi(k.substr(1));
              if (num >= 1 && num <= 24) return VK_F1 + (num - 1);
          } catch(...) {}
     }
-    
+
     if (k.length() == 1) {
         char c = k[0];
         if (c >= 'a' && c <= 'z') return toupper(c);
         if (c >= '0' && c <= '9') return c;
     }
-    
+
     static std::map<std::string, NativeKeyType> keyMap = {
         {"space", VK_SPACE}, {"enter", VK_RETURN}, {"return", VK_RETURN},
         {"escape", VK_ESCAPE}, {"esc", VK_ESCAPE}, {"tab", VK_TAB},
@@ -110,41 +103,77 @@ NativeKeyType ParseKey(const std::string& keyName) {
         {"pause", VK_PAUSE}, {"printscreen", VK_SNAPSHOT},
         {"capslock", VK_CAPITAL}, {"numlock", VK_NUMLOCK}
     };
-    
+
     if (keyMap.count(k)) return keyMap[k];
-    
     return 0;
 }
 
-void KeyboardState::SetToggleShortcut(const std::string& shortcut) {
-    if (shortcut.empty()) return;
-    
-    g_targetCtrl = false;
-    g_targetWin = false;
-    g_targetAlt = false;
-    g_targetShift = false;
-    
+ShortcutConfig KeyboardState::ParseShortcutString(const std::string& shortcut) {
+    ShortcutConfig sc;
+    if (shortcut.empty()) return sc;
+
     std::stringstream ss(shortcut);
     std::string segment;
-    
+
     while (std::getline(ss, segment, '+')) {
         segment.erase(0, segment.find_first_not_of(" \t"));
         segment.erase(segment.find_last_not_of(" \t") + 1);
         std::string lower = segment;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-        
-        if (lower == "ctrl" || lower == "control") g_targetCtrl = true;
-        else if (lower == "win" || lower == "windows" || lower == "cmd") g_targetWin = true;
-        else if (lower == "alt") g_targetAlt = true;
-        else if (lower == "shift") g_targetShift = true;
+
+        if (lower == "ctrl" || lower == "control") sc.ctrl = true;
+        else if (lower == "win" || lower == "windows" || lower == "cmd") sc.win = true;
+        else if (lower == "alt") sc.alt = true;
+        else if (lower == "shift") sc.shift = true;
         else {
             NativeKeyType k = ParseKey(segment);
-            if (k != 0) g_targetKey = k;
+            if (k != 0) sc.key = k;
             else DEBUG_WARN_F("KEYS", "Unknown key in shortcut: {}", segment);
         }
     }
-    DEBUG_INFO_F("KEYS", "Shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}", 
-                 g_targetCtrl, g_targetWin, g_targetAlt, g_targetShift, g_targetKey);
+    return sc;
+}
+
+bool KeyboardState::CheckCycleShortcut(NativeKeyType vkCode) {
+    return MatchesShortcut(g_cycleShortcut, vkCode,
+                           g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
+}
+
+void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
+    g_cycleShortcut = ParseShortcutString(shortcut);
+    if (g_cycleShortcut.key != 0) {
+        DEBUG_INFO_F("KEYS", "Cycle shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     g_cycleShortcut.ctrl, g_cycleShortcut.win, g_cycleShortcut.alt,
+                     g_cycleShortcut.shift, g_cycleShortcut.key);
+    }
+}
+
+void KeyboardState::ClearShortcuts() {
+    g_shortcuts.clear();
+    DEBUG_VERBOSE("KEYS", "All shortcuts cleared");
+}
+
+void KeyboardState::SetToggleShortcut(const std::string& shortcut) {
+    SetToggleShortcutAt(0, shortcut);
+}
+
+void KeyboardState::SetToggleShortcutAt(int index, const std::string& shortcut) {
+    auto sc = ParseShortcutString(shortcut);
+    if (sc.key == 0) return;
+
+    while (static_cast<int>(g_shortcuts.size()) <= index) {
+        g_shortcuts.push_back({});
+    }
+    g_shortcuts[index] = sc;
+    DEBUG_INFO_F("KEYS", "Shortcut[{}] set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                 index, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
+}
+
+void KeyboardState::ResetModifiers() {
+    g_ctrlPressed = false;
+    g_winPressed = false;
+    g_altPressed = false;
+    g_shiftPressed = false;
 }
 
 void KeyboardState::TrackKeyPress(NativeKeyType vkCode, NativeScanType scanCode, bool extended) {
