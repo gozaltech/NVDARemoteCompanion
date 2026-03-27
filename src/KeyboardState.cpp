@@ -133,6 +133,11 @@ ShortcutConfig KeyboardState::ParseShortcutString(const std::string& shortcut) {
     return sc;
 }
 
+void KeyboardState::ClearShortcuts() {
+    g_shortcuts.clear();
+    DEBUG_VERBOSE("KEYS", "All shortcuts cleared");
+}
+
 void KeyboardState::SetToggleShortcut(const std::string& shortcut) {
     SetToggleShortcutAt(0, shortcut);
 }

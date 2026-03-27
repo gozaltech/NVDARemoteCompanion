@@ -8,6 +8,7 @@ A cross-platform C++ client for connecting to NVDA Remote servers, enabling remo
 - **Cross-platform compatibility**: Native support for Windows and Linux
 - **Multiple simultaneous connections**: Connect to multiple NVDA Remote servers with per-profile keyboard shortcuts
 - **Configuration file**: JSON-based config with profiles, auto-detected or specified via `--config`
+- **Interactive CLI**: Manage profiles and connections at runtime (connect, disconnect, add, edit, delete)
 - **Background mode** (Windows): Run without a console window, with a system tray icon
 
 ### Input and Output
@@ -95,7 +96,7 @@ Where `{arch}` is `x64`.
    ./nvda_remote_companion
    ```
 
-2. **Enter connection details** when prompted:
+2. **Enter connection details** when prompted (if no config file or CLI args provided):
    - Server host (IP address or domain name)
    - Server port (typically 6837)
    - Connection key (channel identifier)
@@ -104,7 +105,8 @@ Where `{arch}` is `x64`.
    - **Windows**: Toggle keyboard forwarding with the configured shortcut (default: Ctrl+Win+F11)
    - **Linux**: Currently operates in receive-only mode
    - Speech from the remote session will be played locally
-   - Press `Ctrl+C` to exit gracefully
+   - Use interactive commands to manage connections (type `help` at the `>` prompt)
+   - Press `Ctrl+C` or type `quit` to exit
 
 ### Command Line Options
 
@@ -162,20 +164,22 @@ Generate a default config file with:
             "host": "remote.example.com",
             "port": 6837,
             "key": "my-work-key",
-            "shortcut": "ctrl+win+f11"
+            "shortcut": "ctrl+win+f11",
+            "auto_connect": true
         },
         {
             "name": "home-pc",
             "host": "home.example.com",
             "port": 6837,
             "key": "my-home-key",
-            "shortcut": "ctrl+win+f12"
+            "shortcut": "ctrl+win+f12",
+            "auto_connect": false
         }
     ]
 }
 ```
 
-#### Config Fields
+#### Global Settings
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -186,15 +190,61 @@ Generate a default config file with:
 
 #### Profile Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | No | Display name for the profile |
-| `host` | string | Yes | Server hostname or IP address |
-| `port` | int | No | Server port (default: 6837) |
-| `key` | string | Yes | Connection key/channel |
-| `shortcut` | string | No | Toggle shortcut (default: ctrl+win+f11) |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | No | hostname | Display name for the profile |
+| `host` | string | Yes | | Server hostname or IP address |
+| `port` | int | No | 6837 | Server port |
+| `key` | string | Yes | | Connection key/channel |
+| `shortcut` | string | No | ctrl+win+f11 | Toggle shortcut for keyboard forwarding |
+| `auto_connect` | bool | No | true | Connect automatically on startup |
 
 Command-line arguments override config file values. When using `--host`/`--key` on the command line, a single ad-hoc profile is created and config file profiles are ignored.
+
+### Interactive Commands
+
+While the application is running, you can manage profiles and connections from the `>` prompt:
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `status` | | Show all profiles with connection status |
+| `list` | `ls` | List all profiles with full details |
+| `connect [name\|index]` | `c` | Connect a specific profile, or all disconnected profiles |
+| `disconnect <name\|index>` | `dc` | Disconnect a specific profile |
+| `add <name> <host> <key> [port] [shortcut] [auto_connect]` | | Add a new profile |
+| `edit <name\|index> <field> <value>` | | Edit a profile field |
+| `delete <name\|index>` | `rm` | Delete a profile |
+| `help` | `?` | Show available commands |
+| `quit` | `exit` | Exit the application |
+
+Profiles can be referenced by name or index number. Changes made with `add`, `edit`, and `delete` are saved to the config file immediately.
+
+#### Examples
+
+```
+> status
+Profiles: 2 total, 1 connected
+Config: nvdaremote.json
+  [0] work-pc - remote.example.com:6837 - CONNECTED
+  [1] home-pc - home.example.com:6837 - DISCONNECTED (manual)
+
+> connect home-pc
+Connecting to home-pc (home.example.com:6837)...
+Connected to home-pc
+
+> disconnect 0
+Disconnecting work-pc...
+Disconnected work-pc
+
+> add server3 192.168.1.50 mykey 6837 ctrl+win+f10
+Profile added: [2] server3
+
+> edit server3 auto_connect false
+Profile [2] server3 updated: auto_connect = false
+
+> delete server3
+Profile 'server3' deleted
+```
 
 ### Multiple Connections
 
@@ -203,6 +253,8 @@ Each profile connects to a separate NVDA Remote server/channel simultaneously. O
 - Press a profile's shortcut to start sending keys to that remote machine
 - Press the same shortcut again to stop
 - Press a different profile's shortcut to switch key forwarding to that machine (keys are released on the previous one automatically)
+- Disconnected profiles have their shortcuts disabled automatically
+- Use `connect` / `disconnect` commands to manage connections at runtime
 
 ### Background Mode (Windows)
 
@@ -216,7 +268,7 @@ nvda_remote_companion.exe --background --host example.com --key mykey
 nvda_remote_companion.exe --config nvdaremote.json
 ```
 
-Background mode requires connection parameters (via CLI or config file) since there is no console for interactive input.
+Background mode requires connection parameters (via CLI or config file) since there is no console for interactive input. Interactive commands are not available in background mode.
 
 ## Limitations
 

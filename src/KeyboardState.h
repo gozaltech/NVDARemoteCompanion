@@ -62,5 +62,6 @@ public:
     static std::vector<PressedKey> GetAllPressedKeys();
     static void ClearPressedKeys();
 
+    static void ClearShortcuts();
     static ShortcutConfig ParseShortcutString(const std::string& shortcut);
 };

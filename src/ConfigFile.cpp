@@ -71,6 +71,8 @@ static ProfileConfig ParseProfile(const nlohmann::json& j) {
         p.key = j["key"].get<std::string>();
     if (j.contains("shortcut") && j["shortcut"].is_string())
         p.shortcut = j["shortcut"].get<std::string>();
+    if (j.contains("auto_connect") && j["auto_connect"].is_boolean())
+        p.autoConnect = j["auto_connect"].get<bool>();
     return p;
 }
 
@@ -154,10 +156,38 @@ bool ConfigFile::CreateDefault(const std::string& path) {
                 {"host", ""},
                 {"port", Config::DEFAULT_PORT},
                 {"key", ""},
-                {"shortcut", "ctrl+win+f11"}
+                {"shortcut", "ctrl+win+f11"},
+                {"auto_connect", true}
             })
         })}
     };
+
+    std::ofstream file(path);
+    if (!file.is_open()) return false;
+
+    file << j.dump(4) << std::endl;
+    return file.good();
+}
+
+bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
+    nlohmann::ordered_json j;
+
+    j["debug_level"] = data.debugLevel.value_or("warning");
+    j["speech"] = data.speech.value_or(true);
+    j["background"] = data.background.value_or(false);
+
+    auto profilesArr = nlohmann::ordered_json::array();
+    for (const auto& p : data.profiles) {
+        nlohmann::ordered_json pj;
+        pj["name"] = p.name;
+        pj["host"] = p.host;
+        pj["port"] = p.port;
+        pj["key"] = p.key;
+        pj["shortcut"] = p.shortcut;
+        pj["auto_connect"] = p.autoConnect;
+        profilesArr.push_back(std::move(pj));
+    }
+    j["profiles"] = std::move(profilesArr);
 
     std::ofstream file(path);
     if (!file.is_open()) return false;

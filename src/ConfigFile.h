@@ -9,6 +9,7 @@ struct ProfileConfig {
     int port = 6837;
     std::string key;
     std::string shortcut;
+    bool autoConnect = true;
 };
 
 struct ConfigFileData {
@@ -28,4 +29,5 @@ namespace ConfigFile {
     std::string FindConfigFile(const std::string& explicitPath = "");
     ConfigFileData Load(const std::string& path);
     bool CreateDefault(const std::string& path);
+    bool Save(const std::string& path, const ConfigFileData& data);
 }
