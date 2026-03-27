@@ -58,17 +58,19 @@ struct CommandLineArgs {
     bool noBackground = false;
     bool hasConnectionParams = false;
     bool portSet = false;
-    
+
+    std::vector<ProfileConfig> profiles;
+
     std::vector<std::string> errors;
-    
+
     void addError(const std::string& error) {
         errors.push_back(error);
     }
-    
+
     bool hasErrors() const {
         return !errors.empty();
     }
-    
+
     void printErrors() const {
         for (const auto& error : errors) {
             std::cerr << "Error: " << error << std::endl;
@@ -79,7 +81,7 @@ struct CommandLineArgs {
 
 namespace ArgHandlers {
     template<typename T>
-    auto createStringHandler(T CommandLineArgs::* member, const std::string& errorMsg, 
+    auto createStringHandler(T CommandLineArgs::* member, const std::string& errorMsg,
                            std::function<Config::ValidationResult(const std::string&)> validator = nullptr) {
         return [member, errorMsg, validator](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
             if (i + 1 >= argc) {
@@ -99,7 +101,7 @@ namespace ArgHandlers {
             return true;
         };
     }
-    
+
     auto createPortHandler() {
         return [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
             if (i + 1 >= argc) {
@@ -123,7 +125,7 @@ namespace ArgHandlers {
             }
         };
     }
-    
+
     template<typename T>
     auto createFlagHandler(T CommandLineArgs::* member, T value) {
         return [member, value](CommandLineArgs& args, int&, int, char**) -> bool {
@@ -131,7 +133,7 @@ namespace ArgHandlers {
             return true;
         };
     }
-    
+
     auto createDebugHandler(Debug::Level level) {
         return [level](CommandLineArgs& args, int&, int, char**) -> bool {
             args.debugEnabled = true;
@@ -144,21 +146,21 @@ namespace ArgHandlers {
 CommandLineArgs parseArguments(int argc, char* argv[]) {
     CommandLineArgs args;
 
-    auto hostHandler = ArgHandlers::createStringHandler(&CommandLineArgs::host, 
+    auto hostHandler = ArgHandlers::createStringHandler(&CommandLineArgs::host,
         "--host requires a hostname or IP address", Config::Validator::ValidateHost);
     auto portHandler = ArgHandlers::createPortHandler();
-    auto keyHandler = ArgHandlers::createStringHandler(&CommandLineArgs::key, 
+    auto keyHandler = ArgHandlers::createStringHandler(&CommandLineArgs::key,
         "--key requires a connection key", Config::Validator::ValidateKey);
-    auto shortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::shortcut, 
+    auto shortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::shortcut,
         "--shortcut requires a key combination (e.g., ctrl+win+f11)");
-    
+
     auto debugHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_INFO);
     auto verboseHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_VERBOSE);
     auto traceHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_TRACE);
-    
+
     auto noSpeechHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::speechEnabled, false);
     auto helpHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::showHelp, true);
-    
+
     auto configHandler = [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
         if (i + 1 >= argc) {
             args.addError("--config requires a file path");
@@ -195,10 +197,10 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"--no-speech", noSpeechHandler},
         {"--help", helpHandler}
     };
-    
+
     for (int i = 1; i < argc; i++) {
         std::string arg(argv[i]);
-        
+
         auto it = argHandlers.find(arg);
         if (it != argHandlers.end()) {
             if (!it->second(args, i, argc, argv)) {
@@ -207,7 +209,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
             args.addError("Unknown argument: " + arg);
         }
     }
-    
+
     if (args.hasConnectionParams) {
         if (args.host.empty()) {
             args.addError("Host is required when using command line connection options");
@@ -217,12 +219,12 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
                 args.addError(hostResult.errorMessage);
             }
         }
-        
+
         if (args.key.empty()) {
             args.addError("Connection key is required when using command line connection options");
         }
     }
-    
+
     return args;
 }
 
@@ -255,7 +257,8 @@ void printHelp(const char* programName) {
 #else
     std::cout << "    2. ~/.config/NVDARemoteCompanion/\n";
 #endif
-    std::cout << "  Command-line arguments override config file values.\n\n";
+    std::cout << "  Command-line arguments override config file values.\n";
+    std::cout << "  Use \"profiles\" array in config for multiple connections.\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " -h example.com -k mykey\n";
     std::cout << "  " << programName << " --host 192.168.1.100 --port " << Config::DEFAULT_PORT << " --key shared_session\n";
@@ -266,6 +269,7 @@ void printHelp(const char* programName) {
     std::cout << "  - Connection key must not exceed " << Config::MAX_KEY_LENGTH << " characters\n";
 #ifdef _WIN32
     std::cout << "  - Windows version includes keyboard forwarding\n";
+    std::cout << "  - Each profile can have its own toggle shortcut\n";
 #else
     std::cout << "  - Linux version runs in receive-only mode (no keyboard forwarding)\n";
 #endif
@@ -279,6 +283,34 @@ void signalHandler(int signal) {
 #ifdef _WIN32
         PostQuitMessage(0);
 #endif
+    }
+}
+
+static void resolveProfiles(CommandLineArgs& args, const ConfigFileData& cfg) {
+    if (args.hasConnectionParams) {
+        ProfileConfig p;
+        p.name = "cli";
+        p.host = args.host;
+        p.port = args.port;
+        p.key = args.key;
+        p.shortcut = args.shortcut;
+        args.profiles.push_back(std::move(p));
+        return;
+    }
+
+    if (!cfg.profiles.empty()) {
+        args.profiles = cfg.profiles;
+        return;
+    }
+
+    if (cfg.host && !cfg.host->empty() && cfg.key && !cfg.key->empty()) {
+        ProfileConfig p;
+        p.name = "default";
+        p.host = *cfg.host;
+        p.port = cfg.port.value_or(Config::DEFAULT_PORT);
+        p.key = *cfg.key;
+        if (cfg.shortcut) p.shortcut = *cfg.shortcut;
+        args.profiles.push_back(std::move(p));
     }
 }
 
@@ -296,12 +328,12 @@ int main(int argc, char* argv[]) {
 #endif
 
     auto args = parseArguments(argc, argv);
-    
+
     if (args.showHelp) {
         printHelp(argv[0]);
         return 0;
     }
-    
+
     if (args.hasErrors()) {
         args.printErrors();
         return 1;
@@ -318,23 +350,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    ConfigFileData cfg;
     std::string configPath = ConfigFile::FindConfigFile(args.configPath);
     if (!configPath.empty()) {
-        auto cfg = ConfigFile::Load(configPath);
-        if (cfg.host && args.host.empty()) {
-            args.host = *cfg.host;
-            if (!args.host.empty()) args.hasConnectionParams = true;
-        }
-        if (cfg.port && !args.portSet) {
-            args.port = *cfg.port;
-        }
-        if (cfg.key && args.key.empty()) {
-            args.key = *cfg.key;
-            if (!args.key.empty()) args.hasConnectionParams = true;
-        }
-        if (cfg.shortcut && args.shortcut.empty()) {
-            args.shortcut = *cfg.shortcut;
-        }
+        cfg = ConfigFile::Load(configPath);
         if (cfg.speech.has_value() && !*cfg.speech) {
             args.speechEnabled = false;
         }
@@ -351,10 +370,19 @@ int main(int argc, char* argv[]) {
         std::cerr << "Warning: Config file not found: " << args.configPath << std::endl;
     }
 
+    resolveProfiles(args, cfg);
+
 #ifdef _WIN32
     if (args.backgroundMode) {
-        if (!args.hasConnectionParams || args.host.empty() || args.key.empty()) {
-            std::cerr << "Error: Background mode requires host and key (via --host/--key or config file)" << std::endl;
+        bool hasValidProfile = false;
+        for (const auto& p : args.profiles) {
+            if (!p.host.empty() && !p.key.empty()) {
+                hasValidProfile = true;
+                break;
+            }
+        }
+        if (!hasValidProfile) {
+            std::cerr << "Error: Background mode requires at least one profile with host and key" << std::endl;
             return 1;
         }
         std::string cmdLine;
@@ -362,11 +390,16 @@ int main(int argc, char* argv[]) {
         GetModuleFileNameA(nullptr, exePath, MAX_PATH);
         cmdLine = "\"" + std::string(exePath) + "\"";
         cmdLine += " --no-background";
-        cmdLine += " --host \"" + args.host + "\"";
-        cmdLine += " --port " + std::to_string(args.port);
-        cmdLine += " --key \"" + args.key + "\"";
-        if (!args.shortcut.empty()) {
-            cmdLine += " --shortcut \"" + args.shortcut + "\"";
+        if (!args.configPath.empty()) {
+            cmdLine += " --config \"" + args.configPath + "\"";
+        }
+        if (args.hasConnectionParams) {
+            cmdLine += " --host \"" + args.host + "\"";
+            cmdLine += " --port " + std::to_string(args.port);
+            cmdLine += " --key \"" + args.key + "\"";
+            if (!args.shortcut.empty()) {
+                cmdLine += " --shortcut \"" + args.shortcut + "\"";
+            }
         }
         if (!args.speechEnabled) {
             cmdLine += " --no-speech";
@@ -401,20 +434,12 @@ int main(int argc, char* argv[]) {
 
     Debug::SetEnabled(args.debugEnabled);
     Debug::SetLevel(args.debugLevel);
-    
+
     if (args.debugEnabled) {
         DEBUG_INFO("MAIN", "Debug system initialized");
         DEBUG_INFO_F("MAIN", "Debug level set to: {}", static_cast<int>(args.debugLevel));
-        if (args.hasConnectionParams) {
-            DEBUG_INFO_F("MAIN", "Command line connection: {}:{} key={}", args.host, args.port, args.key);
-        }
+        DEBUG_INFO_F("MAIN", "Number of profiles: {}", args.profiles.size());
     }
-    
-#ifdef _WIN32
-    if (!args.shortcut.empty()) {
-        KeyboardState::SetToggleShortcut(args.shortcut);
-    }
-#endif
 
     Speech::SetEnabled(args.speechEnabled);
     if (args.speechEnabled) {
@@ -427,39 +452,63 @@ int main(int argc, char* argv[]) {
     } else {
         DEBUG_INFO("MAIN", "Speech system disabled by command line option");
     }
-    
-    ConnectionManager connectionManager;
-    
+
+    std::vector<std::unique_ptr<ConnectionManager>> connections;
+
 #ifdef _WIN32
     DWORD mainThreadId = GetCurrentThreadId();
-    connectionManager.SetDisconnectCallback([mainThreadId]() {
-        DEBUG_INFO("MAIN", "Connection lost callback triggered - posting message to main thread");
-        PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
-    });
 #endif
 
-    bool connectionSuccess = false;
-    
-    if (args.hasConnectionParams) {
-        connectionSuccess = connectionManager.EstablishConnection(args.host, args.port, args.key);
-    } else {
-        connectionSuccess = connectionManager.EstablishConnection();
-    }
-    
-    if (!connectionSuccess) {
-        return 1;
-    }
-    
+    if (args.profiles.empty()) {
+        auto cm = std::make_unique<ConnectionManager>();
 #ifdef _WIN32
-    if (!args.shortcut.empty()) {
-        KeyboardState::SetToggleShortcut(args.shortcut);
-    } else {
-        std::string interactiveShortcut = connectionManager.GetShortcut();
+        cm->SetDisconnectCallback([mainThreadId]() {
+            PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
+        });
+#endif
+        if (!cm->EstablishConnection()) {
+            return 1;
+        }
+#ifdef _WIN32
+        std::string interactiveShortcut = cm->GetShortcut();
         if (!interactiveShortcut.empty()) {
-            KeyboardState::SetToggleShortcut(interactiveShortcut);
+            KeyboardState::SetToggleShortcutAt(0, interactiveShortcut);
+        }
+        MessageSender::SetNetworkClient(0, cm->GetClient());
+#endif
+        connections.push_back(std::move(cm));
+    } else {
+        for (int i = 0; i < static_cast<int>(args.profiles.size()); i++) {
+            const auto& profile = args.profiles[i];
+            DEBUG_INFO_F("MAIN", "Connecting profile '{}': {}:{}", profile.name, profile.host, profile.port);
+            std::cout << "Connecting to " << profile.name << " (" << profile.host << ":" << profile.port << ")..." << std::endl;
+
+            auto cm = std::make_unique<ConnectionManager>();
+#ifdef _WIN32
+            cm->SetDisconnectCallback([mainThreadId]() {
+                PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
+            });
+#endif
+            if (!cm->EstablishConnection(profile.host, profile.port, profile.key, profile.shortcut)) {
+                std::cerr << "Warning: Failed to connect profile '" << profile.name << "'" << std::endl;
+                continue;
+            }
+            std::cout << "Connected to " << profile.name << std::endl;
+
+#ifdef _WIN32
+            std::string sc = profile.shortcut;
+            if (sc.empty()) sc = "ctrl+win+f11";
+            KeyboardState::SetToggleShortcutAt(static_cast<int>(connections.size()), sc);
+            MessageSender::SetNetworkClient(static_cast<int>(connections.size()), cm->GetClient());
+#endif
+            connections.push_back(std::move(cm));
+        }
+
+        if (connections.empty()) {
+            std::cerr << "Error: No profiles connected successfully" << std::endl;
+            return 1;
         }
     }
-#endif
 
 #ifdef _WIN32
     bool isTrayMode = (GetConsoleWindow() == nullptr);
@@ -468,11 +517,16 @@ int main(int argc, char* argv[]) {
             DEBUG_ERROR("MAIN", "Failed to create tray icon");
             return 1;
         }
-        TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Connected");
+        std::string tooltip = std::string(Config::APP_NAME) + " - " +
+                              std::to_string(connections.size()) + " connection(s)";
+        TrayIcon::SetTooltip(tooltip);
     }
 
     while (!g_shutdown) {
-        MessageSender::SetNetworkClient(connectionManager.GetClient());
+        for (int i = 0; i < static_cast<int>(connections.size()); i++) {
+            MessageSender::SetNetworkClient(i, connections[i]->GetClient());
+        }
+
         if (!KeyboardHook::Install()) {
             if (isTrayMode) TrayIcon::Destroy();
             return 1;
@@ -495,19 +549,44 @@ int main(int argc, char* argv[]) {
             TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Reconnecting...");
         }
 
-        DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
+        DEBUG_INFO("MAIN", "Checking connections...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        while (!g_shutdown) {
-             if (connectionManager.Reconnect()) {
-                 DEBUG_INFO("MAIN", "Reconnected successfully");
-                 if (isTrayMode) {
-                     TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Connected");
-                 }
-                 break;
-             }
-             DEBUG_INFO("MAIN", "Reconnect failed. Retrying in 5 seconds...");
-             std::this_thread::sleep_for(std::chrono::seconds(5));
+        bool anyConnected = false;
+        for (int i = 0; i < static_cast<int>(connections.size()); i++) {
+            if (!connections[i]->IsConnected()) {
+                DEBUG_INFO_F("MAIN", "Reconnecting profile {}...", i);
+                int retries = 0;
+                while (!g_shutdown && retries < 3) {
+                    if (connections[i]->Reconnect()) {
+                        DEBUG_INFO_F("MAIN", "Profile {} reconnected", i);
+#ifdef _WIN32
+                        MessageSender::SetNetworkClient(i, connections[i]->GetClient());
+#endif
+                        break;
+                    }
+                    retries++;
+                    std::this_thread::sleep_for(std::chrono::seconds(5));
+                }
+            }
+            if (connections[i]->IsConnected()) anyConnected = true;
+        }
+
+        if (!anyConnected && !g_shutdown) {
+            DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            continue;
+        }
+
+        if (isTrayMode && anyConnected) {
+            int connectedCount = 0;
+            for (const auto& c : connections) {
+                if (c->IsConnected()) connectedCount++;
+            }
+            std::string tooltip = std::string(Config::APP_NAME) + " - " +
+                                  std::to_string(connectedCount) + "/" +
+                                  std::to_string(connections.size()) + " connected";
+            TrayIcon::SetTooltip(tooltip);
         }
     }
 
@@ -517,44 +596,48 @@ int main(int argc, char* argv[]) {
 #else
     DEBUG_INFO("MAIN", "Starting input loop (Linux mode - no keyboard hook)");
     std::cout << "NVDA Remote Client running. Press Enter to quit..." << std::endl;
-    
+
     std::thread inputThread([&]() {
         std::string dummy;
         std::getline(std::cin, dummy);
         g_shutdown = true;
     });
-    
+
     while (!g_shutdown) {
-        while (!g_shutdown && connectionManager.IsConnected()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        bool allConnected = true;
+        for (const auto& c : connections) {
+            if (!c->IsConnected()) { allConnected = false; break; }
         }
-        
+        if (allConnected) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
         if (g_shutdown) break;
-        
+
         DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
-        
-        while (!g_shutdown) {
-             if (connectionManager.Reconnect()) {
-                 DEBUG_INFO("MAIN", "Reconnected successfully");
-                 break;
-             }
-             DEBUG_INFO("MAIN", "Reconnect failed. Retrying in 5 seconds...");
-             std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        for (int i = 0; i < static_cast<int>(connections.size()); i++) {
+            if (!connections[i]->IsConnected() && !g_shutdown) {
+                if (connections[i]->Reconnect()) {
+                    DEBUG_INFO_F("MAIN", "Profile {} reconnected", i);
+                }
+            }
         }
     }
-    
+
     if (inputThread.joinable()) {
         inputThread.join();
     }
-    
+
     DEBUG_INFO("MAIN", "Input loop ended, starting cleanup");
 #endif
-    
+
     DEBUG_VERBOSE("MAIN", "Cleaning up speech system");
     Speech::Cleanup();
     DEBUG_VERBOSE("MAIN", "Speech system cleanup completed");
-    
+
     DEBUG_INFO("MAIN", "Application shutdown completed successfully");
     return 0;
 }

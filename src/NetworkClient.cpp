@@ -185,11 +185,9 @@ void NetworkClient::ReceiverThreadLoop() {
                 }
             }
         } else if (bytesReceived == -2) {
-            // WANT_READ: No data available yet
             std::this_thread::sleep_for(std::chrono::milliseconds(Config::SENDER_SLEEP_MS));
             continue;
         } else {
-            // 0 (EOF) or -1 (Error)
             if (bytesReceived == 0) {
                  DEBUG_INFO("NETWORK", "SSL connection closed by peer");
             } else {

@@ -1,15 +1,27 @@
 #pragma once
 #include <string>
 #include <optional>
+#include <vector>
+
+struct ProfileConfig {
+    std::string name;
+    std::string host;
+    int port = 6837;
+    std::string key;
+    std::string shortcut;
+};
 
 struct ConfigFileData {
+    std::optional<std::string> debugLevel;
+    std::optional<bool> speech;
+    std::optional<bool> background;
+
+    std::vector<ProfileConfig> profiles;
+
     std::optional<std::string> host;
     std::optional<int> port;
     std::optional<std::string> key;
     std::optional<std::string> shortcut;
-    std::optional<std::string> debugLevel;
-    std::optional<bool> speech;
-    std::optional<bool> background;
 };
 
 namespace ConfigFile {

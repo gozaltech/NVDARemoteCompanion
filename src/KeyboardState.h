@@ -17,9 +17,17 @@ struct PressedKey {
     uint32_t vkCode;
     uint16_t scanCode;
     bool extended;
-    
-    PressedKey(NativeKeyType vk, NativeScanType scan, bool ext) 
+
+    PressedKey(NativeKeyType vk, NativeScanType scan, bool ext)
         : vkCode(static_cast<uint32_t>(vk)), scanCode(static_cast<uint16_t>(scan)), extended(ext) {}
+};
+
+struct ShortcutConfig {
+    bool ctrl = false;
+    bool win = false;
+    bool alt = false;
+    bool shift = false;
+    NativeKeyType key = 0;
 };
 
 class KeyboardState {
@@ -30,27 +38,29 @@ private:
     static bool g_shiftPressed;
     static std::set<NativeKeyType> g_pressedKeys;
     static std::vector<PressedKey> g_pressedKeyDetails;
-    
-    // Configured shortcut
-    static bool g_targetCtrl;
-    static bool g_targetWin;
-    static bool g_targetAlt;
-    static bool g_targetShift;
-    static NativeKeyType g_targetKey;
+
+    static std::vector<ShortcutConfig> g_shortcuts;
 
 public:
     static bool IsControlKey(NativeKeyType vkCode);
     static bool IsWinKey(NativeKeyType vkCode);
     static bool IsAltKey(NativeKeyType vkCode);
     static bool IsShiftKey(NativeKeyType vkCode);
-    
+
     static void UpdateModifierState(NativeKeyType vkCode, bool isPressed);
-    static bool IsToggleShortcut(NativeKeyType vkCode);
+
+    static int CheckToggleShortcut(NativeKeyType vkCode);
+
     static void SetToggleShortcut(const std::string& shortcut);
+
+    static void SetToggleShortcutAt(int index, const std::string& shortcut);
+
     static void ResetModifiers();
-    
+
     static void TrackKeyPress(NativeKeyType vkCode, NativeScanType scanCode, bool extended);
     static void TrackKeyRelease(NativeKeyType vkCode);
     static std::vector<PressedKey> GetAllPressedKeys();
     static void ClearPressedKeys();
+
+    static ShortcutConfig ParseShortcutString(const std::string& shortcut);
 };
