@@ -321,13 +321,13 @@ If you find NVDA Remote Companion helpful, consider supporting its development:
 
 [![PayPal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/gozaltech)
 
-Your support helps maintain and improve this project for the accessibility community.
+Your support helps maintain and improve this project.
 
 ### Contact
 
 For questions, suggestions, or technical support:
 
-[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/beqabeqa483)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/gozaltech)
 
 You can also:
 - [Open an issue](../../issues) for bug reports or feature requests
