@@ -3,6 +3,7 @@
 #include "Speech.h"
 #include "Audio.h"
 #include "Config.h"
+#include "AppState.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -198,6 +199,14 @@ std::optional<ConnectionParams> ConnectionManager::PromptForConnectionParams() {
     return params;
 }
 
+bool ConnectionManager::ShouldPlaySpeech() const {
+    if (!m_speechEnabled) return false;
+    if (m_muteOnLocalControl && m_profileIndex >= 0 && AppState::GetActiveProfile() != m_profileIndex) {
+        return false;
+    }
+    return true;
+}
+
 void ConnectionManager::HandleIncomingMessage(std::string_view message) {
     json j = json::parse(message, nullptr, false);
     if (j.is_null()) {
@@ -222,7 +231,9 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
     }
     else if (messageType == Config::MSG_TYPE_CANCEL) {
         DEBUG_VERBOSE("CONN", "Received speech cancel request");
-        Speech::Stop();
+        if (ShouldPlaySpeech()) {
+            Speech::Stop();
+        }
     }
     else if (messageType == Config::MSG_TYPE_TONE) {
         int hz = j.value("hz", 440);
@@ -250,7 +261,9 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             if (!speechText.empty()) {
                 speechText.pop_back(); 
                 DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
-                Speech::Speak(speechText, false);
+                if (ShouldPlaySpeech()) {
+                    Speech::Speak(speechText, false);
+                }
             } else {
                 DEBUG_VERBOSE("CONN", "Received empty speech sequence");
             }

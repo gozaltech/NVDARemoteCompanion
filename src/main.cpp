@@ -339,9 +339,6 @@ int main(int argc, char* argv[]) {
     std::string configPath = ConfigFile::FindConfigFile(args.configPath);
     if (!configPath.empty()) {
         cfg = ConfigFile::Load(configPath);
-        if (cfg.speech.has_value() && !*cfg.speech) {
-            args.speechEnabled = false;
-        }
         if (cfg.background.has_value() && *cfg.background && !args.backgroundMode && !args.noBackground) {
             args.backgroundMode = true;
         }
@@ -374,6 +371,7 @@ int main(int argc, char* argv[]) {
         p.key = args.key;
         p.shortcut = args.shortcut;
         p.autoConnect = true;
+        p.speech = args.speechEnabled;
         cfg.profiles.clear();
         cfg.profiles.push_back(std::move(p));
     }
@@ -483,6 +481,7 @@ int main(int argc, char* argv[]) {
 
     if (cfg.profiles.empty()) {
         auto cm = std::make_unique<ConnectionManager>();
+        cm->SetSpeechEnabled(true);
 #ifdef _WIN32
         cm->SetDisconnectCallback([mainThreadId]() {
             PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);

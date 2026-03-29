@@ -160,7 +160,6 @@ Generate a default config file with:
 ```json
 {
     "debug_level": "warning",
-    "speech": true,
     "background": false,
     "cycle_shortcut": "ctrl+alt+f11",
     "profiles": [
@@ -169,7 +168,9 @@ Generate a default config file with:
             "host": "remote.example.com",
             "port": 6837,
             "key": "my-work-key",
-            "auto_connect": true
+            "auto_connect": true,
+            "speech": true,
+            "mute_on_local_control": false
         },
         {
             "name": "home-pc",
@@ -177,7 +178,9 @@ Generate a default config file with:
             "port": 6837,
             "key": "my-home-key",
             "shortcut": "ctrl+win+f12",
-            "auto_connect": false
+            "auto_connect": false,
+            "speech": true,
+            "mute_on_local_control": true
         }
     ]
 }
@@ -188,7 +191,6 @@ Generate a default config file with:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `debug_level` | string | `"warning"` | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
-| `speech` | bool | `true` | Enable/disable speech synthesis |
 | `background` | bool | `false` | Run in background mode with system tray (Windows only) |
 | `cycle_shortcut` | string | `"ctrl+alt+f11"` | Shortcut to cycle between profiles and local machine |
 | `profiles` | array | `[]` | Connection profiles (see below) |
@@ -203,6 +205,8 @@ Generate a default config file with:
 | `key` | string | Yes | | Connection key/channel |
 | `shortcut` | string | No | none | Optional direct toggle shortcut for this profile |
 | `auto_connect` | bool | No | `true` | Connect automatically on startup |
+| `speech` | bool | No | `true` | Play speech received from this profile |
+| `mute_on_local_control` | bool | No | `false` | Mute this profile's speech when not actively forwarding keys to it |
 
 Command-line arguments override config file values. When using `--host`/`--key` on the command line, a single ad-hoc profile is created and config file profiles are ignored.
 
@@ -239,7 +243,7 @@ While the application is running, you can manage profiles and connections from t
 | `connect [name\|index]` | `c` | Connect a specific profile, or all disconnected profiles |
 | `disconnect <name\|index>` | `dc` | Disconnect a specific profile |
 | `add <name> <host> <key> [port] [shortcut] [auto_connect]` | | Add a new profile |
-| `edit <name\|index> <field> <value>` | | Edit a profile field |
+| `edit <name\|index> <field> <value>` | | Edit a profile field (fields: `name`, `host`, `port`, `key`, `shortcut`, `auto_connect`, `speech`, `mute_on_local_control`) |
 | `delete <name\|index>` | `rm` | Delete a profile |
 | `help` | `?` | Show available commands |
 | `quit` | `exit` | Exit the application |

@@ -17,11 +17,15 @@ private:
     std::shared_ptr<NetworkClient> m_client;
     ConnectionParams m_params;
     bool m_protocolHandshakeComplete;
+    bool m_speechEnabled = false;
+    bool m_muteOnLocalControl = false;
+    int m_profileIndex = -1;
 
     std::optional<ConnectionParams> PromptForConnectionParams();
     void HandleIncomingMessage(std::string_view message);
     bool PerformHandshake();
     bool EstablishConnectionInternal();
+    bool ShouldPlaySpeech() const;
 
 public:
     ConnectionManager();
@@ -35,4 +39,7 @@ public:
     std::shared_ptr<NetworkClient> GetClient() { return m_client; }
     std::string GetShortcut() const { return m_params.shortcut; }
     bool IsConnected() const;
+    void SetSpeechEnabled(bool enabled) { m_speechEnabled = enabled; }
+    void SetMuteOnLocalControl(bool enabled) { m_muteOnLocalControl = enabled; }
+    void SetProfileIndex(int index) { m_profileIndex = index; }
 };

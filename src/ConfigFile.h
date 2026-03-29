@@ -10,11 +10,12 @@ struct ProfileConfig {
     std::string key;
     std::string shortcut;
     bool autoConnect = true;
+    bool speech = true;
+    bool muteOnLocalControl = false;
 };
 
 struct ConfigFileData {
     std::optional<std::string> debugLevel;
-    std::optional<bool> speech;
     std::optional<bool> background;
     std::optional<std::string> cycleShortcut;
 
