@@ -64,6 +64,8 @@ void CommandHandler::ConnectSession(int index) {
     std::cout << "Connecting to " << p.name << " (" << p.host << ":" << p.port << ")..." << std::endl;
 
     session.connection = std::make_unique<ConnectionManager>();
+    session.connection->SetSpeechEnabled(p.speech);
+    session.connection->SetMuteOnLocalControl(p.muteOnLocalControl);
     if (m_disconnectCallbackFactory) {
         m_disconnectCallbackFactory(*session.connection);
     }
@@ -101,6 +103,7 @@ void CommandHandler::RebuildShortcuts() {
                 KeyboardState::SetToggleShortcutAt(shortcutIdx, session.config.shortcut);
             }
             MessageSender::SetNetworkClient(shortcutIdx, session.connection->GetClient());
+            session.connection->SetProfileIndex(shortcutIdx);
             session.shortcutIndex = shortcutIdx;
             connectedIndices.push_back(shortcutIdx);
             connectedNames.push_back(session.config.name);
@@ -261,6 +264,8 @@ void CommandHandler::CmdList() {
                   << " | key=" << p.key
                   << " | shortcut=" << (p.shortcut.empty() ? "ctrl+win+f11" : p.shortcut)
                   << " | auto_connect=" << (p.autoConnect ? "yes" : "no")
+                  << " | speech=" << (p.speech ? "yes" : "no")
+                  << " | mute_on_local_control=" << (p.muteOnLocalControl ? "yes" : "no")
                   << std::endl;
     }
 }
@@ -342,7 +347,7 @@ void CommandHandler::CmdEdit(const std::string& args) {
 
     if (target.empty() || field.empty() || value.empty()) {
         std::cout << "Usage: edit <name or index> <field> <value>" << std::endl;
-        std::cout << "Fields: name, host, port, key, shortcut, auto_connect" << std::endl;
+        std::cout << "Fields: name, host, port, key, shortcut, auto_connect, speech, mute_on_local_control" << std::endl;
         return;
     }
 
@@ -367,6 +372,20 @@ void CommandHandler::CmdEdit(const std::string& args) {
     else if (field == "auto_connect") {
         std::transform(value.begin(), value.end(), value.begin(), ::tolower);
         p.autoConnect = (value == "true" || value == "yes" || value == "1");
+    }
+    else if (field == "speech") {
+        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        p.speech = (value == "true" || value == "yes" || value == "1");
+        if (m_sessions[idx].connection) {
+            m_sessions[idx].connection->SetSpeechEnabled(p.speech);
+        }
+    }
+    else if (field == "mute_on_local_control") {
+        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        p.muteOnLocalControl = (value == "true" || value == "yes" || value == "1");
+        if (m_sessions[idx].connection) {
+            m_sessions[idx].connection->SetMuteOnLocalControl(p.muteOnLocalControl);
+        }
     }
     else {
         std::cout << "Unknown field: " << field << std::endl;

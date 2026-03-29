@@ -73,6 +73,10 @@ static ProfileConfig ParseProfile(const nlohmann::json& j) {
         p.shortcut = j["shortcut"].get<std::string>();
     if (j.contains("auto_connect") && j["auto_connect"].is_boolean())
         p.autoConnect = j["auto_connect"].get<bool>();
+    if (j.contains("speech") && j["speech"].is_boolean())
+        p.speech = j["speech"].get<bool>();
+    if (j.contains("mute_on_local_control") && j["mute_on_local_control"].is_boolean())
+        p.muteOnLocalControl = j["mute_on_local_control"].get<bool>();
     return p;
 }
 
@@ -91,9 +95,6 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
 
         if (j.contains("debug_level") && j["debug_level"].is_string()) {
             data.debugLevel = j["debug_level"].get<std::string>();
-        }
-        if (j.contains("speech") && j["speech"].is_boolean()) {
-            data.speech = j["speech"].get<bool>();
         }
         if (j.contains("background") && j["background"].is_boolean()) {
             data.background = j["background"].get<bool>();
@@ -151,7 +152,6 @@ bool ConfigFile::CreateDefault(const std::string& path) {
 
     nlohmann::ordered_json j = {
         {"debug_level", "warning"},
-        {"speech", true},
         {"background", false},
         {"cycle_shortcut", "ctrl+alt+f11"},
         {"profiles", nlohmann::ordered_json::array({
@@ -161,7 +161,9 @@ bool ConfigFile::CreateDefault(const std::string& path) {
                 {"port", Config::DEFAULT_PORT},
                 {"key", ""},
                 {"shortcut", "ctrl+win+f11"},
-                {"auto_connect", true}
+                {"auto_connect", true},
+                {"speech", true},
+                {"mute_on_local_control", false}
             })
         })}
     };
@@ -177,7 +179,6 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     nlohmann::ordered_json j;
 
     j["debug_level"] = data.debugLevel.value_or("warning");
-    j["speech"] = data.speech.value_or(true);
     j["background"] = data.background.value_or(false);
     j["cycle_shortcut"] = data.cycleShortcut.value_or("ctrl+alt+f11");
 
@@ -190,6 +191,8 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         pj["key"] = p.key;
         pj["shortcut"] = p.shortcut;
         pj["auto_connect"] = p.autoConnect;
+        pj["speech"] = p.speech;
+        pj["mute_on_local_control"] = p.muteOnLocalControl;
         profilesArr.push_back(std::move(pj));
     }
     j["profiles"] = std::move(profilesArr);
