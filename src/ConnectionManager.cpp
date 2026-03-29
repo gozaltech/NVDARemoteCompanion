@@ -3,7 +3,9 @@
 #include "Speech.h"
 #include "Audio.h"
 #include "Config.h"
+#ifdef _WIN32
 #include "AppState.h"
+#endif
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -201,9 +203,11 @@ std::optional<ConnectionParams> ConnectionManager::PromptForConnectionParams() {
 
 bool ConnectionManager::ShouldPlaySpeech() const {
     if (!m_speechEnabled) return false;
+#ifdef _WIN32
     if (m_muteOnLocalControl && m_profileIndex >= 0 && AppState::GetActiveProfile() != m_profileIndex) {
         return false;
     }
+#endif
     return true;
 }
 
