@@ -102,6 +102,12 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
         if (j.contains("cycle_shortcut") && j["cycle_shortcut"].is_string()) {
             data.cycleShortcut = j["cycle_shortcut"].get<std::string>();
         }
+        if (j.contains("exit_shortcut") && j["exit_shortcut"].is_string()) {
+            data.exitShortcut = j["exit_shortcut"].get<std::string>();
+        }
+        if (j.contains("reinstall_hook_shortcut") && j["reinstall_hook_shortcut"].is_string()) {
+            data.reinstallHookShortcut = j["reinstall_hook_shortcut"].get<std::string>();
+        }
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
             for (const auto& pj : j["profiles"]) {
@@ -181,6 +187,8 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     j["debug_level"] = data.debugLevel.value_or("warning");
     j["background"] = data.background.value_or(false);
     j["cycle_shortcut"] = data.cycleShortcut.value_or("ctrl+alt+f11");
+    if (data.exitShortcut) j["exit_shortcut"] = *data.exitShortcut;
+    if (data.reinstallHookShortcut) j["reinstall_hook_shortcut"] = *data.reinstallHookShortcut;
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {

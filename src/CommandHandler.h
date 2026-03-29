@@ -43,6 +43,7 @@ private:
     void CmdEdit(const std::string& args);
     void CmdDelete(const std::string& args);
     void CmdHelp();
+    void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);
     void SaveConfig();

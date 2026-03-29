@@ -468,6 +468,11 @@ int main(int argc, char* argv[]) {
         if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
         if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
         KeyboardState::SetCycleShortcut(cycleSc);
+
+        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
+            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
+        if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
+            KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
     }
 
     DWORD mainThreadId = GetCurrentThreadId();

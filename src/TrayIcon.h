@@ -24,6 +24,7 @@ private:
 
     static constexpr UINT WM_TRAYICON = WM_USER + 100;
     static constexpr UINT ID_TRAY_EXIT = 1001;
+    static constexpr UINT ID_TRAY_REINSTALL_HOOK = 1002;
 };
 
 #endif

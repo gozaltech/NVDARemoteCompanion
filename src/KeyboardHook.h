@@ -3,6 +3,7 @@
 #include <atomic>
 
 constexpr UINT WM_CONNECTION_LOST = WM_USER + 1;
+constexpr UINT WM_REINSTALL_HOOK  = WM_USER + 2;
 
 extern std::atomic<bool> g_shutdown;
 
@@ -16,5 +17,6 @@ private:
 public:
     static bool Install();
     static void Uninstall();
+    static void Reinstall();
     static void RunMessageLoop();
 };

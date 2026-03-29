@@ -26,6 +26,9 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             DEBUG_INFO("TRAY", "Exit requested from tray menu");
             g_shutdown = true;
             PostQuitMessage(0);
+        } else if (LOWORD(wParam) == ID_TRAY_REINSTALL_HOOK) {
+            DEBUG_INFO("TRAY", "Reinstall keyboard hook requested from tray menu");
+            KeyboardHook::Reinstall();
         }
         return 0;
 
@@ -60,6 +63,8 @@ bool TrayIcon::Create() {
     }
 
     s_menu = CreatePopupMenu();
+    AppendMenuA(s_menu, MF_STRING, ID_TRAY_REINSTALL_HOOK, "Reinstall keyboard hook");
+    AppendMenuA(s_menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuA(s_menu, MF_STRING, ID_TRAY_EXIT, "Exit");
 
     s_nid.cbSize = sizeof(s_nid);
@@ -113,6 +118,11 @@ void TrayIcon::RunMessageLoop() {
         if (msg.message == WM_CONNECTION_LOST) {
             DEBUG_INFO("TRAY", "Connection lost message received");
             break;
+        }
+        if (msg.message == WM_REINSTALL_HOOK) {
+            DEBUG_INFO("TRAY", "Reinstall keyboard hook message received");
+            KeyboardHook::Reinstall();
+            continue;
         }
         TranslateMessage(&msg);
         DispatchMessage(&msg);

@@ -219,6 +219,7 @@ void CommandHandler::HandleCommand(const std::string& line) {
     else if (cmd == "edit") CmdEdit(args);
     else if (cmd == "delete" || cmd == "rm") CmdDelete(args);
     else if (cmd == "help" || cmd == "?") CmdHelp();
+    else if (cmd == "reinstall-hook" || cmd == "hook") CmdReinstallHook();
     else if (cmd == "quit" || cmd == "exit") {
         g_shutdown = true;
 #ifdef _WIN32
@@ -432,8 +433,23 @@ void CommandHandler::CmdHelp() {
     std::cout << "  edit <name|idx> <field> <value>" << std::endl;
     std::cout << "                      Edit a profile field" << std::endl;
     std::cout << "  delete (rm) <name|idx>  Delete a profile" << std::endl;
+    std::cout << "  reinstall-hook (hook)  Reinstall keyboard hook (fixes NVDA modifier after NVDA restart)" << std::endl;
     std::cout << "  help (?)            Show this help" << std::endl;
     std::cout << "  quit (exit)         Exit the application" << std::endl;
+}
+
+void CommandHandler::CmdReinstallHook() {
+#ifdef _WIN32
+    std::cout << "Reinstalling keyboard hook..." << std::endl;
+    if (g_mainThreadId != 0) {
+        PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
+        std::cout << "Keyboard hook reinstalled." << std::endl;
+    } else {
+        std::cout << "Error: Cannot reinstall hook (main thread not available)." << std::endl;
+    }
+#else
+    std::cout << "Keyboard hook is not available on this platform." << std::endl;
+#endif
 }
 
 int CommandHandler::FindProfileIndex(const std::string& nameOrIndex) {

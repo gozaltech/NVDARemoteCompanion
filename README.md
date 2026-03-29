@@ -193,6 +193,8 @@ Generate a default config file with:
 | `debug_level` | string | `"warning"` | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
 | `background` | bool | `false` | Run in background mode with system tray (Windows only) |
 | `cycle_shortcut` | string | `"ctrl+alt+f11"` | Shortcut to cycle between profiles and local machine |
+| `exit_shortcut` | string | none | Shortcut to gracefully exit the application (Windows only, unset by default) |
+| `reinstall_hook_shortcut` | string | none | Shortcut to reinstall the keyboard hook (Windows only, unset by default) |
 | `profiles` | array | `[]` | Connection profiles (see below) |
 
 #### Profile Fields
@@ -232,6 +234,21 @@ You can optionally assign a dedicated shortcut to individual profiles via the `s
 
 Both methods work together. Use the cycle shortcut for sequential switching and per-profile shortcuts for quick access to frequently used connections.
 
+#### Other Global Shortcuts (Windows only, unset by default)
+
+| Shortcut config key | Description |
+|---------------------|-------------|
+| `exit_shortcut` | Gracefully exit the application |
+| `reinstall_hook_shortcut` | Reinstall the keyboard hook — useful after restarting NVDA, which may push its hook in front of ours and intercept the NVDA modifier key before it reaches this app |
+
+Example:
+```json
+{
+    "exit_shortcut": "ctrl+win+f10",
+    "reinstall_hook_shortcut": "ctrl+win+f9"
+}
+```
+
 ### Interactive Commands
 
 While the application is running, you can manage profiles and connections from the `>` prompt:
@@ -245,6 +262,7 @@ While the application is running, you can manage profiles and connections from t
 | `add <name> <host> <key> [port] [shortcut] [auto_connect]` | | Add a new profile |
 | `edit <name\|index> <field> <value>` | | Edit a profile field (fields: `name`, `host`, `port`, `key`, `shortcut`, `auto_connect`, `speech`, `mute_on_local_control`) |
 | `delete <name\|index>` | `rm` | Delete a profile |
+| `reinstall-hook` | `hook` | Reinstall keyboard hook (fixes NVDA modifier after NVDA restart, Windows only) |
 | `help` | `?` | Show available commands |
 | `quit` | `exit` | Exit the application |
 

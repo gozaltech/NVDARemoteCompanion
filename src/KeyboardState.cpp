@@ -24,6 +24,10 @@ bool KeyboardState::g_shiftPressed = false;
 
 std::vector<ShortcutConfig> KeyboardState::g_shortcuts;
 ShortcutConfig KeyboardState::g_cycleShortcut;
+ShortcutConfig KeyboardState::g_exitShortcut;
+bool KeyboardState::g_exitShortcutSet = false;
+ShortcutConfig KeyboardState::g_reinstallHookShortcut;
+bool KeyboardState::g_reinstallHookShortcutSet = false;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
@@ -146,6 +150,37 @@ void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
                      g_cycleShortcut.ctrl, g_cycleShortcut.win, g_cycleShortcut.alt,
                      g_cycleShortcut.shift, g_cycleShortcut.key);
     }
+}
+
+void KeyboardState::SetExitShortcut(const std::string& shortcut) {
+    g_exitShortcut = ParseShortcutString(shortcut);
+    g_exitShortcutSet = (g_exitShortcut.key != 0);
+    if (g_exitShortcutSet) {
+        DEBUG_INFO_F("KEYS", "Exit shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     g_exitShortcut.ctrl, g_exitShortcut.win, g_exitShortcut.alt,
+                     g_exitShortcut.shift, g_exitShortcut.key);
+    }
+}
+
+void KeyboardState::SetReinstallHookShortcut(const std::string& shortcut) {
+    g_reinstallHookShortcut = ParseShortcutString(shortcut);
+    g_reinstallHookShortcutSet = (g_reinstallHookShortcut.key != 0);
+    if (g_reinstallHookShortcutSet) {
+        DEBUG_INFO_F("KEYS", "Reinstall hook shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     g_reinstallHookShortcut.ctrl, g_reinstallHookShortcut.win,
+                     g_reinstallHookShortcut.alt, g_reinstallHookShortcut.shift,
+                     g_reinstallHookShortcut.key);
+    }
+}
+
+bool KeyboardState::CheckExitShortcut(NativeKeyType vkCode) {
+    return g_exitShortcutSet && MatchesShortcut(g_exitShortcut, vkCode,
+                                                g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
+}
+
+bool KeyboardState::CheckReinstallHookShortcut(NativeKeyType vkCode) {
+    return g_reinstallHookShortcutSet && MatchesShortcut(g_reinstallHookShortcut, vkCode,
+                                                         g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
 }
 
 void KeyboardState::ClearShortcuts() {
