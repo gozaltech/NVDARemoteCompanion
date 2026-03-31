@@ -67,10 +67,12 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             DEBUG_VERBOSE("CONN", "Received speech cancel request");
             if (self.ShouldPlaySpeech()) Speech::Stop();
         }},
-        {Config::MSG_TYPE_TONE, [](ConnectionManager&, const json& msg) {
-            Audio::PlayTone(msg.value("hz", 440), msg.value("length", 100));
+        {Config::MSG_TYPE_TONE, [](ConnectionManager& self, const json& msg) {
+            if (self.m_forwardAudio)
+                Audio::PlayTone(msg.value("hz", 440), msg.value("length", 100));
         }},
-        {Config::MSG_TYPE_WAVE, [](ConnectionManager&, const json& msg) {
+        {Config::MSG_TYPE_WAVE, [](ConnectionManager& self, const json& msg) {
+            if (!self.m_forwardAudio) return;
             std::string fileName = msg.value("fileName", "");
             if (!fileName.empty()) Audio::PlayWave(fileName);
         }},

@@ -19,6 +19,7 @@ private:
     bool m_protocolHandshakeComplete;
     bool m_speechEnabled = false;
     bool m_muteOnLocalControl = false;
+    bool m_forwardAudio = true;
     int m_profileIndex = -1;
 
     void HandleIncomingMessage(std::string_view message);
@@ -39,5 +40,6 @@ public:
     bool IsConnected() const;
     void SetSpeechEnabled(bool enabled) { m_speechEnabled = enabled; }
     void SetMuteOnLocalControl(bool enabled) { m_muteOnLocalControl = enabled; }
+    void SetForwardAudioEnabled(bool enabled) { m_forwardAudio = enabled; }
     void SetProfileIndex(int index) { m_profileIndex = index; }
 };

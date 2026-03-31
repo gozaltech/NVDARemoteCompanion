@@ -4,6 +4,9 @@
 #include <thread>
 #include <filesystem>
 #include <algorithm>
+#include <atomic>
+
+static std::atomic<bool> g_audioEnabled{true};
 
 #ifdef _WIN32
 #include <windows.h>
@@ -15,7 +18,11 @@
 
 namespace fs = std::filesystem;
 
+void Audio::SetEnabled(bool enabled) { g_audioEnabled = enabled; }
+bool Audio::IsEnabled() { return g_audioEnabled; }
+
 void Audio::PlayTone(int hz, int length) {
+    if (!g_audioEnabled) return;
 #ifdef _WIN32
     std::thread([hz, length]() {
         Beep(static_cast<DWORD>(hz), static_cast<DWORD>(length));
@@ -26,6 +33,7 @@ void Audio::PlayTone(int hz, int length) {
 }
 
 void Audio::PlayWave(const std::string& fileName) {
+    if (!g_audioEnabled) return;
     if (fileName.empty()) return;
 
     std::vector<std::string> searchPaths = {

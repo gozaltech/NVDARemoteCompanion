@@ -184,6 +184,7 @@ void CommandHandler::ConnectSession(int index) {
     session.connection = std::make_unique<ConnectionManager>();
     session.connection->SetSpeechEnabled(p.speech);
     session.connection->SetMuteOnLocalControl(p.muteOnLocalControl);
+    session.connection->SetForwardAudioEnabled(p.forwardAudio);
     if (m_disconnectCallback) {
         session.connection->SetDisconnectCallback(m_disconnectCallback);
     }
@@ -365,6 +366,7 @@ void CommandHandler::CmdList() {
                   << " | auto_connect=" << (p.autoConnect ? "yes" : "no")
                   << " | speech=" << (p.speech ? "yes" : "no")
                   << " | mute_on_local_control=" << (p.muteOnLocalControl ? "yes" : "no")
+                  << " | forward_audio=" << (p.forwardAudio ? "yes" : "no")
                   << std::endl;
     }
 }
@@ -483,6 +485,9 @@ void CommandHandler::CmdAdd(const std::string& args) {
     if (!PromptLine("Mute on local control (y/n)", input, "n")) { std::cout << "Cancelled." << std::endl; return; }
     p.muteOnLocalControl = Config::StringToBool(input);
 
+    if (!PromptLine("Forward audio from remote (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
+    p.forwardAudio = input.empty() ? true : Config::StringToBool(input, true);
+
     ProfileSession session;
     session.config = p;
     m_sessions.push_back(std::move(session));
@@ -500,7 +505,7 @@ void CommandHandler::CmdEdit(const std::string& args) {
 
     if (target.empty() || field.empty() || value.empty()) {
         std::cout << "Usage: edit <name or index> <field> <value>" << std::endl;
-        std::cout << "Fields: name, host, port, key, shortcut, auto_connect, speech, mute_on_local_control" << std::endl;
+        std::cout << "Fields: name, host, port, key, shortcut, auto_connect, speech, mute_on_local_control, forward_audio" << std::endl;
         return;
     }
 
@@ -535,6 +540,11 @@ void CommandHandler::CmdEdit(const std::string& args) {
         {"mute_on_local_control", [](ProfileSession& s, const std::string& v) {
             s.config.muteOnLocalControl = Config::StringToBool(v);
             if (s.connection) s.connection->SetMuteOnLocalControl(s.config.muteOnLocalControl);
+            return true;
+        }},
+        {"forward_audio", [](ProfileSession& s, const std::string& v) {
+            s.config.forwardAudio = Config::StringToBool(v);
+            if (s.connection) s.connection->SetForwardAudioEnabled(s.config.forwardAudio);
             return true;
         }},
     };

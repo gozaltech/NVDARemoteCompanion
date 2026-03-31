@@ -12,6 +12,7 @@ namespace ProfileFields {
     constexpr const char* AUTO_CONNECT          = "auto_connect";
     constexpr const char* SPEECH                = "speech";
     constexpr const char* MUTE_ON_LOCAL_CONTROL = "mute_on_local_control";
+    constexpr const char* FORWARD_AUDIO         = "forward_audio";
 }
 
 struct ProfileConfig {
@@ -23,11 +24,13 @@ struct ProfileConfig {
     bool autoConnect = true;
     bool speech = true;
     bool muteOnLocalControl = false;
+    bool forwardAudio = true;
 };
 
 struct ConfigFileData {
     std::optional<std::string> debugLevel;
     std::optional<bool> background;
+    std::optional<bool> audio;
     std::optional<std::string> cycleShortcut;
     std::optional<std::string> exitShortcut;
     std::optional<std::string> reinstallHookShortcut;

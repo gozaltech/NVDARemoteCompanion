@@ -9,6 +9,7 @@
 #include "CommandHandler.h"
 #include "ConfigFile.h"
 #include "Debug.h"
+#include "Audio.h"
 #include "Speech.h"
 #include "Config.h"
 
@@ -53,6 +54,7 @@ struct CommandLineArgs {
     Debug::Level debugLevel = Debug::LEVEL_WARNING;
     bool debugEnabled = false;
     bool speechEnabled = true;
+    bool audioEnabled = true;
     bool showHelp = false;
     bool createConfig = false;
     bool backgroundMode = false;
@@ -159,6 +161,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
     auto traceHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_TRACE);
 
     auto noSpeechHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::speechEnabled, false);
+    auto noAudioHandler  = ArgHandlers::createFlagHandler(&CommandLineArgs::audioEnabled,  false);
     auto helpHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::showHelp, true);
 
     auto configHandler = ArgHandlers::createStringHandler(&CommandLineArgs::configPath,
@@ -192,6 +195,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"-t", traceHandler},
         {"--trace", traceHandler},
         {"--no-speech", noSpeechHandler},
+        {"--no-audio",  noAudioHandler},
         {"--help", helpHandler}
     };
 
@@ -243,6 +247,7 @@ void printHelp(const char* programName) {
     std::cout << "      --create-config   Create a default config file and exit\n\n";
     std::cout << "Other Options:\n";
     std::cout << "      --no-speech       Disable speech synthesis\n";
+    std::cout << "      --no-audio        Disable companion audio feedback (toggle tones, connect/disconnect sounds)\n";
 #ifdef _WIN32
     std::cout << "  -b, --background      Run without console window (system tray only)\n";
 #endif
@@ -447,6 +452,9 @@ int main(int argc, char* argv[]) {
         DEBUG_INFO_F("MAIN", "Debug level set to: {}", static_cast<int>(args.debugLevel));
         DEBUG_INFO_F("MAIN", "Number of profiles: {}", cfg.profiles.size());
     }
+
+    if (cfg.audio.has_value() && !*cfg.audio) args.audioEnabled = false;
+    Audio::SetEnabled(args.audioEnabled);
 
     Speech::SetEnabled(args.speechEnabled);
     if (args.speechEnabled) {

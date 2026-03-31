@@ -97,6 +97,7 @@ static ProfileConfig ParseProfile(const nlohmann::json& j) {
     ReadJson(j, ProfileFields::AUTO_CONNECT,         p.autoConnect);
     ReadJson(j, ProfileFields::SPEECH,               p.speech);
     ReadJson(j, ProfileFields::MUTE_ON_LOCAL_CONTROL, p.muteOnLocalControl);
+    ReadJson(j, ProfileFields::FORWARD_AUDIO,         p.forwardAudio);
     return p;
 }
 
@@ -115,6 +116,7 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
 
         ReadJson(j, "debug_level",              data.debugLevel);
         ReadJson(j, "background",               data.background);
+        ReadJson(j, "audio",                    data.audio);
         ReadJson(j, "cycle_shortcut",           data.cycleShortcut);
         ReadJson(j, "exit_shortcut",            data.exitShortcut);
         ReadJson(j, "reinstall_hook_shortcut",  data.reinstallHookShortcut);
@@ -162,6 +164,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
     nlohmann::ordered_json j = {
         {"debug_level", "warning"},
         {"background", false},
+        {"audio", true},
         {"cycle_shortcut", "ctrl+alt+f11"},
         {"profiles", nlohmann::ordered_json::array({
             nlohmann::ordered_json({
@@ -172,7 +175,8 @@ bool ConfigFile::CreateDefault(const std::string& path) {
                 {"shortcut", "ctrl+win+f11"},
                 {"auto_connect", true},
                 {"speech", true},
-                {"mute_on_local_control", false}
+                {"mute_on_local_control", false},
+                {"forward_audio", true}
             })
         })}
     };
@@ -189,6 +193,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
 
     j["debug_level"] = data.debugLevel.value_or("warning");
     j["background"] = data.background.value_or(false);
+    j["audio"] = data.audio.value_or(true);
     j["cycle_shortcut"] = data.cycleShortcut.value_or("ctrl+alt+f11");
     if (data.exitShortcut) j["exit_shortcut"] = *data.exitShortcut;
     if (data.reinstallHookShortcut) j["reinstall_hook_shortcut"] = *data.reinstallHookShortcut;
@@ -205,6 +210,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         pj[ProfileFields::AUTO_CONNECT]         = p.autoConnect;
         pj[ProfileFields::SPEECH]               = p.speech;
         pj[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
+        pj[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
         profilesArr.push_back(std::move(pj));
     }
     j["profiles"] = std::move(profilesArr);
