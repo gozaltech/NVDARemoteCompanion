@@ -615,8 +615,8 @@ int CommandHandler::FindProfileIndex(const std::string& nameOrIndex) {
 
 void CommandHandler::SaveConfig() {
     if (m_configPath.empty()) {
-        std::cout << "No config file path - changes not saved to disk" << std::endl;
-        return;
+        m_configPath = ConfigFile::DefaultPath();
+        std::cout << "Creating config file: " << m_configPath << std::endl;
     }
     if (ConfigFile::Save(m_configPath, m_configData)) {
         DEBUG_INFO("CONFIG", "Config saved to: " + m_configPath);

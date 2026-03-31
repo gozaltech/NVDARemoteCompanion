@@ -42,6 +42,7 @@ struct ConfigFileData {
 };
 
 namespace ConfigFile {
+    std::string DefaultPath();
     std::string FindConfigFile(const std::string& explicitPath = "");
     ConfigFileData Load(const std::string& path);
     bool CreateDefault(const std::string& path);

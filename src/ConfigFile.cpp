@@ -56,6 +56,14 @@ static void ReadJson(const nlohmann::json& j, const char* key, T& out) {
     }
 }
 
+std::string ConfigFile::DefaultPath() {
+    std::string configDir = GetPlatformConfigDir();
+    if (!configDir.empty()) {
+        return (fs::path(configDir) / CONFIG_FILENAME).string();
+    }
+    return CONFIG_FILENAME;
+}
+
 std::string ConfigFile::FindConfigFile(const std::string& explicitPath) {
     if (!explicitPath.empty()) {
         if (fs::exists(explicitPath)) {
