@@ -71,6 +71,7 @@ namespace {
                                p.key, Config::Validator::ValidateKey, Config::TrimWhitespace))
             return std::nullopt;
         std::cout << "Connection key: " << p.key << "\n\n";
+#ifdef _WIN32
         if (!GetValidatedInput("Enter toggle shortcut (default: ctrl+win+f11): ",
                                p.shortcut, nullptr, Config::TrimWhitespace))
             return std::nullopt;
@@ -80,12 +81,15 @@ namespace {
         } else {
             std::cout << "Shortcut: " << p.shortcut << "\n\n";
         }
+#endif
         std::cout << "Connection Summary:\n"
-                  << "  Host:     " << p.host << "\n"
-                  << "  Port:     " << p.port << "\n"
-                  << "  Key:      " << p.key << "\n"
-                  << "  Shortcut: " << p.shortcut << "\n\n"
-                  << "Connecting to NVDA Remote server...\n";
+                  << "  Host:  " << p.host << "\n"
+                  << "  Port:  " << p.port << "\n"
+                  << "  Key:   " << p.key << "\n"
+#ifdef _WIN32
+                  << "  Shortcut: " << p.shortcut << "\n"
+#endif
+                  << "\nConnecting to NVDA Remote server...\n";
         return p;
     }
 }
@@ -309,7 +313,9 @@ void CommandHandler::HandleCommand(const std::string& line) {
         {{"edit"},                      [](CommandHandler& h, const std::string& a){ h.CmdEdit(a); }},
         {{"delete", "rm"},              [](CommandHandler& h, const std::string& a){ h.CmdDelete(a); }},
         {{"help", "?"},                 [](CommandHandler& h, const std::string&)  { h.CmdHelp(); }},
+#ifdef _WIN32
         {{"reinstall-hook", "hook"},    [](CommandHandler& h, const std::string&)  { h.CmdReinstallHook(); }},
+#endif
         {{"quit", "exit"},              [](CommandHandler&, const std::string&) {
             g_shutdown = true;
 #ifdef _WIN32
@@ -473,8 +479,10 @@ void CommandHandler::CmdAdd(const std::string& args) {
     if (input.empty()) { std::cout << "Key is required." << std::endl; return; }
     p.key = input;
 
+#ifdef _WIN32
     if (!PromptLine("Shortcut (optional, e.g. ctrl+win+f12)", input, "")) { std::cout << "Cancelled." << std::endl; return; }
     p.shortcut = input;
+#endif
 
     if (!PromptLine("Auto connect (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
     p.autoConnect = input.empty() ? true : Config::StringToBool(input, true);
@@ -592,12 +600,18 @@ void CommandHandler::CmdHelp() {
     std::cout << "  connect [name|idx]  Connect a profile (or all disconnected)" << std::endl;
     std::cout << "  disconnect (dc) <name|idx>  Disconnect a profile" << std::endl;
     std::cout << "  add                 Add a new profile (interactive wizard)" << std::endl;
-    std::cout << "  add <name> <host> <key> [port] [shortcut] [auto_connect]" << std::endl;
+    std::cout << "  add <name> <host> <key> [port]"
+#ifdef _WIN32
+                 " [shortcut]"
+#endif
+                 " [auto_connect]" << std::endl;
     std::cout << "                      Add a new profile (one-liner)" << std::endl;
     std::cout << "  edit <name|idx> <field> <value>" << std::endl;
     std::cout << "                      Edit a profile field" << std::endl;
     std::cout << "  delete (rm) <name|idx>  Delete a profile" << std::endl;
+#ifdef _WIN32
     std::cout << "  reinstall-hook (hook)  Reinstall keyboard hook (fixes NVDA modifier after NVDA restart)" << std::endl;
+#endif
     std::cout << "  help (?)            Show this help" << std::endl;
     std::cout << "  quit (exit)         Exit the application" << std::endl;
 }
