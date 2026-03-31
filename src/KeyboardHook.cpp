@@ -8,8 +8,6 @@
 #include <thread>
 #include <chrono>
 
-extern std::atomic<bool> g_shutdown;
-
 
 HHOOK KeyboardHook::g_keyboardHook = nullptr;
 

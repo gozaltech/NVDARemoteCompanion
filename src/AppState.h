@@ -10,6 +10,7 @@ private:
     static std::vector<std::string> g_profileNames;
 
     static void ReleaseAllKeys();
+    static void AnnounceLocal();
 
 public:
     static bool IsSendingKeys();

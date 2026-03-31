@@ -7,7 +7,7 @@
 
 HWND TrayIcon::s_hwnd = nullptr;
 NOTIFYICONDATAA TrayIcon::s_nid = {};
-HMENU TrayIcon::s_menu = nullptr;
+UniqueMenu TrayIcon::s_menu;
 
 LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -16,7 +16,7 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             POINT pt;
             GetCursorPos(&pt);
             SetForegroundWindow(hwnd);
-            TrackPopupMenu(s_menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, nullptr);
+            TrackPopupMenu(s_menu.get(), TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, nullptr);
             PostMessage(hwnd, WM_NULL, 0, 0);
         }
         return 0;
@@ -62,10 +62,10 @@ bool TrayIcon::Create() {
         return false;
     }
 
-    s_menu = CreatePopupMenu();
-    AppendMenuA(s_menu, MF_STRING, ID_TRAY_REINSTALL_HOOK, "Reinstall keyboard hook");
-    AppendMenuA(s_menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuA(s_menu, MF_STRING, ID_TRAY_EXIT, "Exit");
+    s_menu.reset(CreatePopupMenu());
+    AppendMenuA(s_menu.get(), MF_STRING, ID_TRAY_REINSTALL_HOOK, "Reinstall keyboard hook");
+    AppendMenuA(s_menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuA(s_menu.get(), MF_STRING, ID_TRAY_EXIT, "Exit");
 
     s_nid.cbSize = sizeof(s_nid);
     s_nid.hWnd = s_hwnd;
@@ -91,10 +91,7 @@ void TrayIcon::Destroy() {
         Shell_NotifyIconA(NIM_DELETE, &s_nid);
         s_nid.hWnd = nullptr;
     }
-    if (s_menu) {
-        DestroyMenu(s_menu);
-        s_menu = nullptr;
-    }
+    s_menu.reset();
     if (s_hwnd) {
         DestroyWindow(s_hwnd);
         s_hwnd = nullptr;

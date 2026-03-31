@@ -3,6 +3,17 @@
 #include <optional>
 #include <vector>
 
+namespace ProfileFields {
+    constexpr const char* NAME                  = "name";
+    constexpr const char* HOST                  = "host";
+    constexpr const char* PORT                  = "port";
+    constexpr const char* KEY                   = "key";
+    constexpr const char* SHORTCUT              = "shortcut";
+    constexpr const char* AUTO_CONNECT          = "auto_connect";
+    constexpr const char* SPEECH                = "speech";
+    constexpr const char* MUTE_ON_LOCAL_CONTROL = "mute_on_local_control";
+}
+
 struct ProfileConfig {
     std::string name;
     std::string host;

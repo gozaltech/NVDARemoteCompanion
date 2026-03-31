@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(NVDARemoteCompanion VERSION 1.0.0)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(NVDA_VERSION "2025.2" CACHE STRING "NVDA version to download")
@@ -87,6 +87,7 @@ set(COMMON_SOURCES
     src/Audio.cpp
     src/ConfigFile.cpp
     src/CommandHandler.cpp
+    src/Input.cpp
 )
 
 if(WIN32)

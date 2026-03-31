@@ -36,6 +36,26 @@ static std::string GetPlatformConfigDir() {
 
 static constexpr const char* CONFIG_FILENAME = "nvdaremote.json";
 
+template<typename T>
+static void ReadJson(const nlohmann::json& j, const char* key, std::optional<T>& out) {
+    if (j.contains(key)) {
+        try { out = j[key].get<T>(); }
+        catch (const std::exception& e) {
+            DEBUG_WARN_F("CONFIG", "Failed to read field '{}': {}", key, e.what());
+        }
+    }
+}
+
+template<typename T>
+static void ReadJson(const nlohmann::json& j, const char* key, T& out) {
+    if (j.contains(key)) {
+        try { out = j[key].get<T>(); }
+        catch (const std::exception& e) {
+            DEBUG_WARN_F("CONFIG", "Failed to read field '{}': {}", key, e.what());
+        }
+    }
+}
+
 std::string ConfigFile::FindConfigFile(const std::string& explicitPath) {
     if (!explicitPath.empty()) {
         if (fs::exists(explicitPath)) {
@@ -61,22 +81,14 @@ std::string ConfigFile::FindConfigFile(const std::string& explicitPath) {
 
 static ProfileConfig ParseProfile(const nlohmann::json& j) {
     ProfileConfig p;
-    if (j.contains("name") && j["name"].is_string())
-        p.name = j["name"].get<std::string>();
-    if (j.contains("host") && j["host"].is_string())
-        p.host = j["host"].get<std::string>();
-    if (j.contains("port") && j["port"].is_number_integer())
-        p.port = j["port"].get<int>();
-    if (j.contains("key") && j["key"].is_string())
-        p.key = j["key"].get<std::string>();
-    if (j.contains("shortcut") && j["shortcut"].is_string())
-        p.shortcut = j["shortcut"].get<std::string>();
-    if (j.contains("auto_connect") && j["auto_connect"].is_boolean())
-        p.autoConnect = j["auto_connect"].get<bool>();
-    if (j.contains("speech") && j["speech"].is_boolean())
-        p.speech = j["speech"].get<bool>();
-    if (j.contains("mute_on_local_control") && j["mute_on_local_control"].is_boolean())
-        p.muteOnLocalControl = j["mute_on_local_control"].get<bool>();
+    ReadJson(j, ProfileFields::NAME,                 p.name);
+    ReadJson(j, ProfileFields::HOST,                 p.host);
+    ReadJson(j, ProfileFields::PORT,                 p.port);
+    ReadJson(j, ProfileFields::KEY,                  p.key);
+    ReadJson(j, ProfileFields::SHORTCUT,             p.shortcut);
+    ReadJson(j, ProfileFields::AUTO_CONNECT,         p.autoConnect);
+    ReadJson(j, ProfileFields::SPEECH,               p.speech);
+    ReadJson(j, ProfileFields::MUTE_ON_LOCAL_CONTROL, p.muteOnLocalControl);
     return p;
 }
 
@@ -93,24 +105,12 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
     try {
         nlohmann::json j = nlohmann::json::parse(file);
 
-        if (j.contains("debug_level") && j["debug_level"].is_string()) {
-            data.debugLevel = j["debug_level"].get<std::string>();
-        }
-        if (j.contains("background") && j["background"].is_boolean()) {
-            data.background = j["background"].get<bool>();
-        }
-        if (j.contains("cycle_shortcut") && j["cycle_shortcut"].is_string()) {
-            data.cycleShortcut = j["cycle_shortcut"].get<std::string>();
-        }
-        if (j.contains("exit_shortcut") && j["exit_shortcut"].is_string()) {
-            data.exitShortcut = j["exit_shortcut"].get<std::string>();
-        }
-        if (j.contains("reinstall_hook_shortcut") && j["reinstall_hook_shortcut"].is_string()) {
-            data.reinstallHookShortcut = j["reinstall_hook_shortcut"].get<std::string>();
-        }
-        if (j.contains("local_shortcut") && j["local_shortcut"].is_string()) {
-            data.localShortcut = j["local_shortcut"].get<std::string>();
-        }
+        ReadJson(j, "debug_level",              data.debugLevel);
+        ReadJson(j, "background",               data.background);
+        ReadJson(j, "cycle_shortcut",           data.cycleShortcut);
+        ReadJson(j, "exit_shortcut",            data.exitShortcut);
+        ReadJson(j, "reinstall_hook_shortcut",  data.reinstallHookShortcut);
+        ReadJson(j, "local_shortcut",           data.localShortcut);
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
             for (const auto& pj : j["profiles"]) {
@@ -129,18 +129,10 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
             }
         }
 
-        if (j.contains("host") && j["host"].is_string()) {
-            data.host = j["host"].get<std::string>();
-        }
-        if (j.contains("port") && j["port"].is_number_integer()) {
-            data.port = j["port"].get<int>();
-        }
-        if (j.contains("key") && j["key"].is_string()) {
-            data.key = j["key"].get<std::string>();
-        }
-        if (j.contains("shortcut") && j["shortcut"].is_string()) {
-            data.shortcut = j["shortcut"].get<std::string>();
-        }
+        ReadJson(j, "host",     data.host);
+        ReadJson(j, "port",     data.port);
+        ReadJson(j, "key",      data.key);
+        ReadJson(j, "shortcut", data.shortcut);
 
         DEBUG_INFO("CONFIG", "Loaded config from: " + path);
     } catch (const nlohmann::json::exception& e) {
@@ -197,14 +189,14 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {
         nlohmann::ordered_json pj;
-        pj["name"] = p.name;
-        pj["host"] = p.host;
-        pj["port"] = p.port;
-        pj["key"] = p.key;
-        pj["shortcut"] = p.shortcut;
-        pj["auto_connect"] = p.autoConnect;
-        pj["speech"] = p.speech;
-        pj["mute_on_local_control"] = p.muteOnLocalControl;
+        pj[ProfileFields::NAME]                 = p.name;
+        pj[ProfileFields::HOST]                 = p.host;
+        pj[ProfileFields::PORT]                 = p.port;
+        pj[ProfileFields::KEY]                  = p.key;
+        pj[ProfileFields::SHORTCUT]             = p.shortcut;
+        pj[ProfileFields::AUTO_CONNECT]         = p.autoConnect;
+        pj[ProfileFields::SPEECH]               = p.speech;
+        pj[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
         profilesArr.push_back(std::move(pj));
     }
     j["profiles"] = std::move(profilesArr);

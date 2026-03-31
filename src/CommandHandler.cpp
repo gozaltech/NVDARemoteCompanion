@@ -1,9 +1,11 @@
 #include "CommandHandler.h"
-#include "Debug.h"
 #include "Config.h"
+#include "Debug.h"
+#include "Input.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <unordered_map>
 
 #ifdef _WIN32
 #include "MessageSender.h"
@@ -11,12 +13,82 @@
 #include "KeyboardHook.h"
 #include "AppState.h"
 #include <windows.h>
-#include <conio.h>
 extern DWORD g_mainThreadId;
-#else
-#include <unistd.h>
-#include <sys/select.h>
 #endif
+
+namespace {
+    using ValidatorFunc = std::function<Config::ValidationResult(const std::string&)>;
+    using ProcessorFunc = std::function<std::string(const std::string&)>;
+
+    bool GetValidatedInput(const std::string& prompt, std::string& result,
+                           ValidatorFunc validator = nullptr,
+                           ProcessorFunc processor = nullptr) {
+        while (true) {
+            std::cout << prompt << std::flush;
+            std::string input;
+            if (!Input::ReadLine(input)) return false;
+            if (processor) input = processor(input);
+            if (validator) {
+                auto v = validator(input);
+                if (!v) { std::cout << Config::ERROR_PREFIX << v.errorMessage << "\n\n"; continue; }
+            }
+            result = std::move(input);
+            return true;
+        }
+    }
+
+    bool GetValidatedPort(int& result, int defaultValue = Config::DEFAULT_PORT) {
+        std::string prompt = "Enter server port [" + std::to_string(defaultValue) + "]: ";
+        std::string input;
+        auto validator = [](const std::string& s) -> Config::ValidationResult {
+            if (s.empty()) return {true};
+            try { return Config::Validator::ValidatePort(std::stoi(s)); }
+            catch (...) { return {false, Config::ERROR_PORT_INVALID}; }
+        };
+        while (true) {
+            if (!GetValidatedInput(prompt, input, validator, Config::TrimWhitespace)) return false;
+            if (input.empty()) {
+                result = defaultValue;
+                std::cout << "Using default port: " << defaultValue << "\n\n";
+                return true;
+            }
+            result = std::stoi(input);
+            std::cout << "Port: " << result << "\n\n";
+            return true;
+        }
+    }
+
+    std::optional<ConnectionParams> PromptForConnectionParams() {
+        ConnectionParams p;
+        std::cout << "\n" << Config::APP_NAME << " - Interactive Setup\n"
+                  << std::string(50, '=') << "\n\nServer Configuration:\n";
+        if (!GetValidatedInput("Enter server host (IP address or domain name): ",
+                               p.host, Config::Validator::ValidateHost, Config::TrimWhitespace))
+            return std::nullopt;
+        std::cout << "Host: " << p.host << "\n\n";
+        if (!GetValidatedPort(p.port)) return std::nullopt;
+        if (!GetValidatedInput("Enter connection key/channel: ",
+                               p.key, Config::Validator::ValidateKey, Config::TrimWhitespace))
+            return std::nullopt;
+        std::cout << "Connection key: " << p.key << "\n\n";
+        if (!GetValidatedInput("Enter toggle shortcut (default: ctrl+win+f11): ",
+                               p.shortcut, nullptr, Config::TrimWhitespace))
+            return std::nullopt;
+        if (p.shortcut.empty()) {
+            p.shortcut = "ctrl+win+f11";
+            std::cout << "Using default shortcut: " << p.shortcut << "\n\n";
+        } else {
+            std::cout << "Shortcut: " << p.shortcut << "\n\n";
+        }
+        std::cout << "Connection Summary:\n"
+                  << "  Host:     " << p.host << "\n"
+                  << "  Port:     " << p.port << "\n"
+                  << "  Key:      " << p.key << "\n"
+                  << "  Shortcut: " << p.shortcut << "\n\n"
+                  << "Connecting to NVDA Remote server...\n";
+        return p;
+    }
+}
 
 CommandHandler::CommandHandler(std::string configPath, ConfigFileData configData)
     : m_configPath(std::move(configPath)), m_configData(std::move(configData)) {
@@ -27,13 +99,13 @@ CommandHandler::CommandHandler(std::string configPath, ConfigFileData configData
     }
 }
 
-void CommandHandler::SetDisconnectCallbackFactory(std::function<void(ConnectionManager&)> factory) {
-    m_disconnectCallbackFactory = std::move(factory);
+void CommandHandler::SetDisconnectCallback(std::function<void()> callback) {
+    m_disconnectCallback = std::move(callback);
 }
 
 int CommandHandler::ConnectAutoProfiles() {
     int connected = 0;
-    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+    for (int i = 0; i < Config::isize(m_sessions); i++) {
         if (m_sessions[i].config.autoConnect &&
             !m_sessions[i].config.host.empty() &&
             !m_sessions[i].config.key.empty()) {
@@ -47,8 +119,54 @@ int CommandHandler::ConnectAutoProfiles() {
     return connected;
 }
 
+int CommandHandler::CountConnectedSessions() const {
+    int count = 0;
+    for (const auto& s : m_sessions) {
+        if (s.connection && s.connection->IsConnected()) count++;
+    }
+    return count;
+}
+
+bool CommandHandler::HasAnyConnected() const {
+    return CountConnectedSessions() > 0;
+}
+
+bool CommandHandler::HasDisconnectedSessions() const {
+    for (const auto& s : m_sessions) {
+        if (s.connection && !s.connection->IsConnected()) return true;
+    }
+    return false;
+}
+
+bool CommandHandler::ConnectInteractive() {
+    auto paramsOpt = PromptForConnectionParams();
+    if (!paramsOpt) return false;
+
+    auto cm = std::make_unique<ConnectionManager>();
+    cm->SetSpeechEnabled(true);
+    if (m_disconnectCallback) cm->SetDisconnectCallback(m_disconnectCallback);
+
+    if (!cm->EstablishConnection(paramsOpt->host, paramsOpt->port, paramsOpt->key, paramsOpt->shortcut)) {
+        return false;
+    }
+
+#ifdef _WIN32
+    if (!paramsOpt->shortcut.empty()) {
+        KeyboardState::SetToggleShortcutAt(0, paramsOpt->shortcut);
+    }
+    MessageSender::SetNetworkClient(0, cm->GetClient());
+#endif
+
+    ProfileSession session;
+    session.config.name = "interactive";
+    session.connection = std::move(cm);
+    session.shortcutIndex = 0;
+    m_sessions.push_back(std::move(session));
+    return true;
+}
+
 void CommandHandler::ConnectSession(int index) {
-    if (index < 0 || index >= static_cast<int>(m_sessions.size())) return;
+    if (!IsValidSessionIndex(index)) return;
     auto& session = m_sessions[index];
 
     if (session.connection && session.connection->IsConnected()) {
@@ -66,8 +184,8 @@ void CommandHandler::ConnectSession(int index) {
     session.connection = std::make_unique<ConnectionManager>();
     session.connection->SetSpeechEnabled(p.speech);
     session.connection->SetMuteOnLocalControl(p.muteOnLocalControl);
-    if (m_disconnectCallbackFactory) {
-        m_disconnectCallbackFactory(*session.connection);
+    if (m_disconnectCallback) {
+        session.connection->SetDisconnectCallback(m_disconnectCallback);
     }
 
     if (session.connection->EstablishConnection(p.host, p.port, p.key, p.shortcut)) {
@@ -79,7 +197,7 @@ void CommandHandler::ConnectSession(int index) {
 }
 
 void CommandHandler::DisconnectSession(int index) {
-    if (index < 0 || index >= static_cast<int>(m_sessions.size())) return;
+    if (!IsValidSessionIndex(index)) return;
     auto& session = m_sessions[index];
     if (session.connection) {
         std::cout << "Disconnecting " << session.config.name << "..." << std::endl;
@@ -96,7 +214,7 @@ void CommandHandler::RebuildShortcuts() {
     std::vector<int> connectedIndices;
     std::vector<std::string> connectedNames;
 
-    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+    for (int i = 0; i < Config::isize(m_sessions); i++) {
         auto& session = m_sessions[i];
         if (session.connection && session.connection->IsConnected()) {
             if (!session.config.shortcut.empty()) {
@@ -129,7 +247,7 @@ void CommandHandler::UpdateNetworkClients() {
 
 void CommandHandler::ReconnectAll() {
     bool changed = false;
-    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+    for (int i = 0; i < Config::isize(m_sessions); i++) {
         auto& session = m_sessions[i];
         if (session.connection && !session.connection->IsConnected()) {
             DEBUG_INFO_F("MAIN", "Reconnecting profile '{}'...", session.config.name);
@@ -147,57 +265,14 @@ void CommandHandler::ReconnectAll() {
 void CommandHandler::RunCommandLoop() {
     std::string line;
     std::cout << "> " << std::flush;
-    while (!g_shutdown) {
-#ifdef _WIN32
-        if (_kbhit()) {
-            int ch = _getch();
-            if (ch == '\r') {
-                std::cout << std::endl;
-                if (!line.empty()) {
-                    HandleCommand(line);
-                    line.clear();
-                }
-                if (!g_shutdown) std::cout << "> " << std::flush;
-            } else if (ch == '\b' && !line.empty()) {
-                line.pop_back();
-                std::cout << "\b \b" << std::flush;
-            } else if (ch == 3) {
-                g_shutdown = true;
-                break;
-            } else if (ch >= 32 && ch <= 126) {
-                line += static_cast<char>(ch);
-                std::cout << static_cast<char>(ch) << std::flush;
-            }
-        } else {
-            Sleep(10);
-        }
-#else
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(STDIN_FILENO, &readfds);
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 100000;
-        int ready = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
-        if (ready > 0) {
-            if (std::getline(std::cin, line)) {
-                if (!line.empty()) {
-                    HandleCommand(line);
-                    line.clear();
-                }
-                if (!g_shutdown) std::cout << "> " << std::flush;
-            } else {
-                break;
-            }
-        }
-#endif
+    while (Input::ReadLine(line)) {
+        if (!line.empty()) HandleCommand(line);
+        if (!g_shutdown) std::cout << "> " << std::flush;
     }
 }
 
 void CommandHandler::HandleCommand(const std::string& line) {
-    std::string trimmed = line;
-    trimmed.erase(0, trimmed.find_first_not_of(" \t"));
-    trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
+    std::string trimmed = Config::TrimWhitespace(line);
     if (trimmed.empty()) return;
 
     std::string cmd, args;
@@ -211,33 +286,45 @@ void CommandHandler::HandleCommand(const std::string& line) {
     }
     std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
 
-    if (cmd == "status") CmdStatus();
-    else if (cmd == "list" || cmd == "ls") CmdList();
-    else if (cmd == "connect" || cmd == "c") CmdConnect(args);
-    else if (cmd == "disconnect" || cmd == "dc") CmdDisconnect(args);
-    else if (cmd == "add") CmdAdd(args);
-    else if (cmd == "edit") CmdEdit(args);
-    else if (cmd == "delete" || cmd == "rm") CmdDelete(args);
-    else if (cmd == "help" || cmd == "?") CmdHelp();
-    else if (cmd == "reinstall-hook" || cmd == "hook") CmdReinstallHook();
-    else if (cmd == "quit" || cmd == "exit") {
-        g_shutdown = true;
+    using CmdHandler = std::function<void(CommandHandler&, const std::string&)>;
+    struct Entry { std::vector<const char*> aliases; CmdHandler handler; };
+    static const std::vector<Entry> table = {
+        {{"status"},                    [](CommandHandler& h, const std::string&)  { h.CmdStatus(); }},
+        {{"list", "ls"},                [](CommandHandler& h, const std::string&)  { h.CmdList(); }},
+        {{"connect", "c"},              [](CommandHandler& h, const std::string& a){ h.CmdConnect(a); }},
+        {{"disconnect", "dc"},          [](CommandHandler& h, const std::string& a){ h.CmdDisconnect(a); }},
+        {{"add"},                       [](CommandHandler& h, const std::string& a){ h.CmdAdd(a); }},
+        {{"edit"},                      [](CommandHandler& h, const std::string& a){ h.CmdEdit(a); }},
+        {{"delete", "rm"},              [](CommandHandler& h, const std::string& a){ h.CmdDelete(a); }},
+        {{"help", "?"},                 [](CommandHandler& h, const std::string&)  { h.CmdHelp(); }},
+        {{"reinstall-hook", "hook"},    [](CommandHandler& h, const std::string&)  { h.CmdReinstallHook(); }},
+        {{"quit", "exit"},              [](CommandHandler&, const std::string&) {
+            g_shutdown = true;
 #ifdef _WIN32
-        if (g_mainThreadId != 0) {
-            PostThreadMessage(g_mainThreadId, WM_QUIT, 0, 0);
-        }
+            if (g_mainThreadId != 0) PostThreadMessage(g_mainThreadId, WM_QUIT, 0, 0);
 #endif
-    }
-    else {
+        }},
+    };
+    static const auto dispatch = []() {
+        std::unordered_map<std::string, const CmdHandler*> map;
+        for (const auto& entry : table) {
+            for (const char* alias : entry.aliases) {
+                map.emplace(alias, &entry.handler);
+            }
+        }
+        return map;
+    }();
+
+    auto it = dispatch.find(cmd);
+    if (it != dispatch.end()) {
+        (*it->second)(*this, args);
+    } else {
         std::cout << "Unknown command: " << cmd << ". Type 'help' for available commands." << std::endl;
     }
 }
 
 void CommandHandler::CmdStatus() {
-    int connected = 0, total = static_cast<int>(m_sessions.size());
-    for (const auto& s : m_sessions) {
-        if (s.connection && s.connection->IsConnected()) connected++;
-    }
+    int connected = CountConnectedSessions(), total = Config::isize(m_sessions);
     std::cout << "Profiles: " << total << " total, " << connected << " connected" << std::endl;
     if (!m_configPath.empty()) {
         std::cout << "Config: " << m_configPath << std::endl;
@@ -258,7 +345,7 @@ void CommandHandler::CmdList() {
         std::cout << "No profiles configured" << std::endl;
         return;
     }
-    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+    for (int i = 0; i < Config::isize(m_sessions); i++) {
         const auto& p = m_sessions[i].config;
         std::cout << "  [" << i << "] " << p.name
                   << " | " << p.host << ":" << p.port
@@ -273,7 +360,7 @@ void CommandHandler::CmdList() {
 
 void CommandHandler::CmdConnect(const std::string& args) {
     if (args.empty()) {
-        for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+        for (int i = 0; i < Config::isize(m_sessions); i++) {
             if (!(m_sessions[i].connection && m_sessions[i].connection->IsConnected())) {
                 ConnectSession(i);
             }
@@ -311,37 +398,8 @@ bool CommandHandler::PromptLine(const std::string& prompt, std::string& out, con
         std::cout << prompt << ": " << std::flush;
 
     std::string line;
-#ifdef _WIN32
-    while (!g_shutdown) {
-        if (_kbhit()) {
-            int ch = _getch();
-            if (ch == '\r') {
-                std::cout << std::endl;
-                break;
-            } else if (ch == '\b' && !line.empty()) {
-                line.pop_back();
-                std::cout << "\b \b" << std::flush;
-            } else if (ch == 3) {
-                std::cout << std::endl;
-                g_shutdown = true;
-                return false;
-            } else if (ch == 27) {
-                std::cout << std::endl;
-                return false;
-            } else if (ch >= 32 && ch <= 126) {
-                line += static_cast<char>(ch);
-                std::cout << static_cast<char>(ch) << std::flush;
-            }
-        } else {
-            Sleep(10);
-        }
-    }
-    if (g_shutdown) return false;
-#else
-    if (!std::getline(std::cin, line)) {
-        return false;
-    }
-#endif
+    if (!Input::ReadLineWithEscape(line)) return false;
+
     if (line.empty() && !defaultValue.empty())
         line = defaultValue;
     out = line;
@@ -370,10 +428,7 @@ void CommandHandler::CmdAdd(const std::string& args) {
             try { p.port = std::stoi(token); } catch (...) { p.port = Config::DEFAULT_PORT; }
         }
         if (ss >> token) p.shortcut = token;
-        if (ss >> token) {
-            std::transform(token.begin(), token.end(), token.begin(), ::tolower);
-            p.autoConnect = (token == "true" || token == "yes" || token == "1");
-        }
+        if (ss >> token) p.autoConnect = Config::StringToBool(token);
 
         ProfileSession session;
         session.config = p;
@@ -409,16 +464,13 @@ void CommandHandler::CmdAdd(const std::string& args) {
     p.shortcut = input;
 
     if (!PromptLine("Auto connect (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
-    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-    p.autoConnect = (input == "y" || input == "yes" || input == "1" || input.empty());
+    p.autoConnect = input.empty() ? true : Config::StringToBool(input, true);
 
     if (!PromptLine("Speech (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
-    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-    p.speech = (input == "y" || input == "yes" || input == "1" || input.empty());
+    p.speech = input.empty() ? true : Config::StringToBool(input, true);
 
     if (!PromptLine("Mute on local control (y/n)", input, "n")) { std::cout << "Cancelled." << std::endl; return; }
-    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-    p.muteOnLocalControl = (input == "y" || input == "yes" || input == "1");
+    p.muteOnLocalControl = Config::StringToBool(input);
 
     ProfileSession session;
     session.config = p;
@@ -426,7 +478,7 @@ void CommandHandler::CmdAdd(const std::string& args) {
     m_configData.profiles.push_back(p);
     SaveConfig();
 
-    int idx = static_cast<int>(m_sessions.size()) - 1;
+    int idx = Config::isize(m_sessions) - 1;
     std::cout << "Profile added: [" << idx << "] " << p.name << std::endl;
 }
 
@@ -447,42 +499,43 @@ void CommandHandler::CmdEdit(const std::string& args) {
         return;
     }
 
-    auto& p = m_sessions[idx].config;
+    auto& session = m_sessions[idx];
+    auto& p = session.config;
     std::transform(field.begin(), field.end(), field.begin(), ::tolower);
 
-    if (field == "name") p.name = value;
-    else if (field == "host") p.host = value;
-    else if (field == "port") {
-        try { p.port = std::stoi(value); } catch (...) {
-            std::cout << "Invalid port" << std::endl; return;
-        }
-    }
-    else if (field == "key") p.key = value;
-    else if (field == "shortcut") p.shortcut = value;
-    else if (field == "auto_connect") {
-        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-        p.autoConnect = (value == "true" || value == "yes" || value == "1");
-    }
-    else if (field == "speech") {
-        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-        p.speech = (value == "true" || value == "yes" || value == "1");
-        if (m_sessions[idx].connection) {
-            m_sessions[idx].connection->SetSpeechEnabled(p.speech);
-        }
-    }
-    else if (field == "mute_on_local_control") {
-        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-        p.muteOnLocalControl = (value == "true" || value == "yes" || value == "1");
-        if (m_sessions[idx].connection) {
-            m_sessions[idx].connection->SetMuteOnLocalControl(p.muteOnLocalControl);
-        }
-    }
-    else {
+    using FieldApplier = std::function<bool(ProfileSession&, const std::string&)>;
+    static const std::unordered_map<std::string, FieldApplier> fieldAppliers = {
+        {"name",    [](ProfileSession& s, const std::string& v) { s.config.name = v; return true; }},
+        {"host",    [](ProfileSession& s, const std::string& v) { s.config.host = v; return true; }},
+        {"port",    [](ProfileSession& s, const std::string& v) {
+            try { s.config.port = std::stoi(v); return true; }
+            catch (...) { std::cout << "Invalid port" << std::endl; return false; }
+        }},
+        {"key",      [](ProfileSession& s, const std::string& v) { s.config.key = v; return true; }},
+        {"shortcut", [](ProfileSession& s, const std::string& v) { s.config.shortcut = v; return true; }},
+        {"auto_connect", [](ProfileSession& s, const std::string& v) {
+            s.config.autoConnect = Config::StringToBool(v); return true;
+        }},
+        {"speech", [](ProfileSession& s, const std::string& v) {
+            s.config.speech = Config::StringToBool(v);
+            if (s.connection) s.connection->SetSpeechEnabled(s.config.speech);
+            return true;
+        }},
+        {"mute_on_local_control", [](ProfileSession& s, const std::string& v) {
+            s.config.muteOnLocalControl = Config::StringToBool(v);
+            if (s.connection) s.connection->SetMuteOnLocalControl(s.config.muteOnLocalControl);
+            return true;
+        }},
+    };
+
+    auto it = fieldAppliers.find(field);
+    if (it == fieldAppliers.end()) {
         std::cout << "Unknown field: " << field << std::endl;
         return;
     }
+    if (!it->second(session, value)) return;
 
-    if (idx < static_cast<int>(m_configData.profiles.size())) {
+    if (idx < Config::isize(m_configData.profiles)) {
         m_configData.profiles[idx] = p;
     }
     SaveConfig();
@@ -503,7 +556,7 @@ void CommandHandler::CmdDelete(const std::string& args) {
     std::string name = m_sessions[idx].config.name;
     DisconnectSession(idx);
     m_sessions.erase(m_sessions.begin() + idx);
-    if (idx < static_cast<int>(m_configData.profiles.size())) {
+    if (idx < Config::isize(m_configData.profiles)) {
         m_configData.profiles.erase(m_configData.profiles.begin() + idx);
     }
     RebuildShortcuts();
@@ -545,14 +598,14 @@ void CommandHandler::CmdReinstallHook() {
 int CommandHandler::FindProfileIndex(const std::string& nameOrIndex) {
     try {
         int idx = std::stoi(nameOrIndex);
-        if (idx >= 0 && idx < static_cast<int>(m_sessions.size())) {
+        if (idx >= 0 && idx < Config::isize(m_sessions)) {
             return idx;
         }
     } catch (...) {}
 
     std::string lower = nameOrIndex;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    for (int i = 0; i < static_cast<int>(m_sessions.size()); i++) {
+    for (int i = 0; i < Config::isize(m_sessions); i++) {
         std::string pname = m_sessions[i].config.name;
         std::transform(pname.begin(), pname.end(), pname.begin(), ::tolower);
         if (pname == lower) return i;

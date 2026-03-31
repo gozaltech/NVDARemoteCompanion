@@ -9,134 +9,12 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
-#include <algorithm>
 #include <functional>
-
-#ifdef _WIN32
-    #include <windows.h>
-    #include <conio.h>
-#else
-    #include <unistd.h>
-    #include <sys/select.h>
-#endif
+#include <unordered_map>
 
 extern std::atomic<bool> g_shutdown;
 
-bool GetLineWithShutdownCheck(const std::string& prompt, std::string& result);
 
-namespace {
-    class InputHandler {
-    public:
-        using ValidatorFunc = std::function<Config::ValidationResult(const std::string&)>;
-        using ProcessorFunc = std::function<std::string(const std::string&)>;
-        
-        static bool GetValidatedInput(const std::string& prompt, 
-                                    std::string& result,
-                                    ValidatorFunc validator = nullptr,
-                                    ProcessorFunc processor = nullptr) {
-            while (true) {
-                std::string input;
-                if (!GetLineWithShutdownCheck(prompt, input)) {
-                    return false;
-                }
-                
-                if (processor) {
-                    input = processor(input);
-                }
-                
-                if (validator) {
-                    auto validation = validator(input);
-                    if (!validation) {
-                        std::cout << Config::ERROR_PREFIX << validation.errorMessage << "\n\n";
-                        continue;
-                    }
-                }
-                
-                result = std::move(input);
-                return true;
-            }
-        }
-        
-        static bool GetValidatedPort(int& result, int defaultValue = Config::DEFAULT_PORT) {
-            std::string prompt = "Enter server port [" + std::to_string(defaultValue) + "]: ";
-            std::string input;
-            
-            auto validator = [](const std::string& str) -> Config::ValidationResult {
-                if (str.empty()) return {true};
-                
-                try {
-                    int port = std::stoi(str);
-                    return Config::Validator::ValidatePort(port);
-                } catch (const std::exception&) {
-                    return {false, Config::ERROR_PORT_INVALID};
-                }
-            };
-            
-            while (true) {
-                if (!GetValidatedInput(prompt, input, validator, Config::TrimWhitespace)) {
-                    return false;
-                }
-                
-                if (input.empty()) {
-                    result = defaultValue;
-                    std::cout << "Using default port: " << defaultValue << "\n\n";
-                    DEBUG_VERBOSE("CONN", "Using default port");
-                    return true;
-                }
-                
-                result = std::stoi(input);
-                std::cout << "Port: " << result << "\n\n";
-                return true;
-            }
-        }
-    };
-}
-
-bool GetLineWithShutdownCheck(const std::string& prompt, std::string& result) {
-    std::cout << prompt;
-    std::cout.flush();
-    
-    result.clear();
-    
-    while (!g_shutdown) {
-#ifdef _WIN32
-        if (_kbhit()) {
-            int ch = _getch();
-            if (ch == '\r') {
-                std::cout << std::endl;
-                return true;
-            } else if (ch == '\b' && !result.empty()) {
-                result.pop_back();
-                std::cout << "\b \b";
-            } else if (ch >= 32 && ch <= 126) {
-                result += static_cast<char>(ch);
-                std::cout << static_cast<char>(ch);
-            }
-            std::cout.flush();
-        } else {
-            Sleep(10);
-        }
-#else
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(STDIN_FILENO, &readfds);
-        
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 100000;
-        
-        int ready = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
-        if (ready > 0) {
-            if (std::getline(std::cin, result)) {
-                return true;
-            }
-        }
-#endif
-    }
-    
-    DEBUG_INFO("CONN", "Input cancelled due to shutdown signal");
-    return false;
-}
 
 ConnectionManager::ConnectionManager() : m_protocolHandshakeComplete(false) {
     m_client = std::make_shared<NetworkClient>();
@@ -155,52 +33,6 @@ ConnectionManager::~ConnectionManager() {
     DEBUG_INFO("CONN", "ConnectionManager destructor completed");
 }
 
-std::optional<ConnectionParams> ConnectionManager::PromptForConnectionParams() {
-    ConnectionParams params;
-    
-    std::cout << "\n" << Config::APP_NAME << " - Interactive Setup\n";
-    std::cout << std::string(50, '=') << "\n\n";
-    
-    std::cout << "Server Configuration:\n";
-    auto hostValidator = [](const std::string& host) { return Config::Validator::ValidateHost(host); };
-    if (!InputHandler::GetValidatedInput("Enter server host (IP address or domain name): ", 
-                                        params.host, hostValidator, Config::TrimWhitespace)) {
-        return std::nullopt;
-    }
-    std::cout << "Host: " << params.host << "\n\n";
-    
-    if (!InputHandler::GetValidatedPort(params.port)) {
-        return std::nullopt;
-    }
-    
-    auto keyValidator = [](const std::string& key) { return Config::Validator::ValidateKey(key); };
-    if (!InputHandler::GetValidatedInput("Enter connection key/channel: ", 
-                                        params.key, keyValidator, Config::TrimWhitespace)) {
-        return std::nullopt;
-    }
-    std::cout << "Connection key: " << params.key << "\n\n";
-
-    if (!InputHandler::GetValidatedInput("Enter toggle shortcut (default: ctrl+win+f11): ", 
-                                        params.shortcut, nullptr, Config::TrimWhitespace)) {
-        return std::nullopt;
-    }
-    if (params.shortcut.empty()) {
-        params.shortcut = "ctrl+win+f11";
-        std::cout << "Using default shortcut: " << params.shortcut << "\n\n";
-    } else {
-        std::cout << "Shortcut: " << params.shortcut << "\n\n";
-    }
-    
-    std::cout << "Connection Summary:\n";
-    std::cout << "  Host: " << params.host << "\n";
-    std::cout << "  Port: " << params.port << "\n";
-    std::cout << "  Key:  " << params.key << "\n";
-    std::cout << "  Shortcut: " << params.shortcut << "\n\n";
-    std::cout << "Connecting to NVDA Remote server...\n";
-    
-    return params;
-}
-
 bool ConnectionManager::ShouldPlaySpeech() const {
     if (!m_speechEnabled) return false;
 #ifdef _WIN32
@@ -217,63 +49,59 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
         DEBUG_ERROR("CONN", "Failed to parse incoming message as JSON");
         return;
     }
-    
-    auto messageType = j.value("type", "");
-    
-    if (messageType == Config::MSG_TYPE_CHANNEL_JOINED) {
-        DEBUG_INFO("CONN", "Successfully joined channel");
-        DEBUG_VERBOSE_F("CONN", "Channel details: {}", j.dump());
-        
-        if (m_client) {
-            DEBUG_VERBOSE("CONN", "Sending braille info");
-            m_client->SendBrailleInfo();
-            m_protocolHandshakeComplete = true;
-            Audio::PlayWave("connected");
-            Speech::Speak("Connected", false);
-            DEBUG_INFO("CONN", "Protocol handshake complete");
-        }
-    }
-    else if (messageType == Config::MSG_TYPE_CANCEL) {
-        DEBUG_VERBOSE("CONN", "Received speech cancel request");
-        if (ShouldPlaySpeech()) {
-            Speech::Stop();
-        }
-    }
-    else if (messageType == Config::MSG_TYPE_TONE) {
-        int hz = j.value("hz", 440);
-        int length = j.value("length", 100);
-        Audio::PlayTone(hz, length);
-    }
-    else if (messageType == Config::MSG_TYPE_WAVE) {
-        std::string fileName = j.value("fileName", "");
-        if (!fileName.empty()) {
-             Audio::PlayWave(fileName);
-        }
-    }
-    else if (messageType == Config::MSG_TYPE_SPEAK) {
-        if (j.contains("sequence") && j["sequence"].is_array()) {
+
+    using Handler = std::function<void(ConnectionManager&, const json&)>;
+    static const std::unordered_map<std::string, Handler> dispatch = {
+        {Config::MSG_TYPE_CHANNEL_JOINED, [](ConnectionManager& self, const json& msg) {
+            DEBUG_INFO("CONN", "Successfully joined channel");
+            DEBUG_VERBOSE_F("CONN", "Channel details: {}", msg.dump());
+            if (self.m_client) {
+                self.m_client->SendBrailleInfo();
+                self.m_protocolHandshakeComplete = true;
+                Audio::PlayWave("connected");
+                Speech::Speak("Connected", false);
+                DEBUG_INFO("CONN", "Protocol handshake complete");
+            }
+        }},
+        {Config::MSG_TYPE_CANCEL, [](ConnectionManager& self, const json&) {
+            DEBUG_VERBOSE("CONN", "Received speech cancel request");
+            if (self.ShouldPlaySpeech()) Speech::Stop();
+        }},
+        {Config::MSG_TYPE_TONE, [](ConnectionManager&, const json& msg) {
+            Audio::PlayTone(msg.value("hz", 440), msg.value("length", 100));
+        }},
+        {Config::MSG_TYPE_WAVE, [](ConnectionManager&, const json& msg) {
+            std::string fileName = msg.value("fileName", "");
+            if (!fileName.empty()) Audio::PlayWave(fileName);
+        }},
+        {Config::MSG_TYPE_SPEAK, [](ConnectionManager& self, const json& msg) {
+            if (!msg.contains("sequence") || !msg["sequence"].is_array()) {
+                DEBUG_VERBOSE("CONN", "Speech message missing or invalid sequence field");
+                return;
+            }
             std::string speechText;
-            for (const auto& item : j["sequence"]) {
+            for (const auto& item : msg["sequence"]) {
                 if (item.is_string()) {
                     auto text = item.get<std::string>();
-                    if (!text.empty()) {
-                        speechText += text + " ";
-                    }
+                    if (!text.empty()) speechText += text + " ";
                 }
             }
-            
-            if (!speechText.empty()) {
-                speechText.pop_back(); 
-                DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
-                if (ShouldPlaySpeech()) {
-                    Speech::Speak(speechText, false);
-                }
-            } else {
+            if (speechText.empty()) {
                 DEBUG_VERBOSE("CONN", "Received empty speech sequence");
+                return;
             }
-        } else {
-            DEBUG_VERBOSE("CONN", "Speech message missing or invalid sequence field");
-        }
+            speechText.pop_back();
+            DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
+            if (self.ShouldPlaySpeech()) Speech::Speak(speechText, false);
+        }},
+    };
+
+    auto messageType = j.value("type", "");
+    auto it = dispatch.find(messageType);
+    if (it != dispatch.end()) {
+        it->second(*this, j);
+    } else if (!messageType.empty()) {
+        DEBUG_VERBOSE_F("CONN", "Unhandled message type: {}", messageType);
     }
 }
 
@@ -298,19 +126,6 @@ bool ConnectionManager::PerformHandshake() {
     }
     
     return true;
-}
-
-bool ConnectionManager::EstablishConnection() {
-    DEBUG_INFO("CONN", "Getting connection parameters from user");
-    auto paramsOpt = PromptForConnectionParams();
-    
-    if (!paramsOpt.has_value()) {
-        DEBUG_INFO("CONN", "Connection cancelled by user");
-        return false;
-    }
-    
-    m_params = paramsOpt.value();
-    return EstablishConnectionInternal();
 }
 
 bool ConnectionManager::EstablishConnection(std::string_view host, int port, std::string_view key, std::string_view shortcut) {

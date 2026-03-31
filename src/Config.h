@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
+#include <algorithm>
 
 namespace Config {
     
@@ -20,7 +21,6 @@ namespace Config {
     constexpr const char* BRAILLE_DISPLAY_NAME = "noBraille";
     constexpr int BRAILLE_CELL_COUNT = 0;
     
-    constexpr int KEY_RELEASE_GRACE_PERIOD_MS = 500;
     constexpr int INPUT_TIMEOUT_MS = 100;
     
     constexpr size_t MAX_HOST_LENGTH = 253;
@@ -73,6 +73,19 @@ namespace Config {
         return IsValidStringLength(key, MAX_KEY_LENGTH);
     }
     
+    template<typename Container>
+    constexpr int isize(const Container& c) {
+        return static_cast<int>(c.size());
+    }
+
+    inline bool StringToBool(std::string_view s, bool defaultValue = false) {
+        std::string lower(s);
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (lower == "true" || lower == "yes" || lower == "y" || lower == "1") return true;
+        if (lower == "false" || lower == "no" || lower == "n" || lower == "0") return false;
+        return defaultValue;
+    }
+
     inline std::string TrimWhitespace(const std::string& str) {
         if (str.empty()) return str;
         

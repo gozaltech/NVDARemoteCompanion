@@ -42,11 +42,11 @@ private:
     static std::vector<ShortcutConfig> g_shortcuts;
     static ShortcutConfig g_cycleShortcut;
     static ShortcutConfig g_exitShortcut;
-    static bool g_exitShortcutSet;
     static ShortcutConfig g_reinstallHookShortcut;
-    static bool g_reinstallHookShortcutSet;
     static ShortcutConfig g_localShortcut;
-    static bool g_localShortcutSet;
+
+    static void ApplyGlobalShortcut(ShortcutConfig& sc, const std::string& shortcut, const char* name);
+    static bool CheckGlobalShortcut(const ShortcutConfig& sc, NativeKeyType vkCode);
 
 public:
     static bool IsControlKey(NativeKeyType vkCode);
@@ -65,6 +65,7 @@ public:
     static bool CheckReinstallHookShortcut(NativeKeyType vkCode);
     static void SetLocalShortcut(const std::string& shortcut);
     static bool CheckLocalShortcut(NativeKeyType vkCode);
+
 
     static void SetToggleShortcut(const std::string& shortcut);
 

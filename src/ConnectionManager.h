@@ -21,7 +21,6 @@ private:
     bool m_muteOnLocalControl = false;
     int m_profileIndex = -1;
 
-    std::optional<ConnectionParams> PromptForConnectionParams();
     void HandleIncomingMessage(std::string_view message);
     bool PerformHandshake();
     bool EstablishConnectionInternal();
@@ -31,7 +30,6 @@ public:
     ConnectionManager();
     ~ConnectionManager();
 
-    bool EstablishConnection();
     bool EstablishConnection(std::string_view host, int port, std::string_view key, std::string_view shortcut = "");
     bool Reconnect();
     void Disconnect();
