@@ -22,8 +22,9 @@
     #include <io.h>
     #include <fcntl.h>
 #else
+    #include "LinuxKeyboardGrab.h"
+    #include "KeyboardState.h"
     #include <unistd.h>
-    #include <sys/select.h>
 #endif
 
 std::atomic<bool> g_shutdown(false);
@@ -273,11 +274,9 @@ void printHelp(const char* programName) {
     std::cout << "  - Host must be a valid hostname or IP address (max " << Config::MAX_HOST_LENGTH << " chars)\n";
     std::cout << "  - Port must be in range " << Config::MIN_PORT << "-" << Config::MAX_PORT << "\n";
     std::cout << "  - Connection key must not exceed " << Config::MAX_KEY_LENGTH << " characters\n";
+    std::cout << "  - Keyboard forwarding requires read access to /dev/input/event* and /dev/uinput\n";
 #ifdef _WIN32
-    std::cout << "  - Windows version includes keyboard forwarding\n";
     std::cout << "  - Each profile can have its own toggle shortcut\n";
-#else
-    std::cout << "  - Linux version runs in receive-only mode (no keyboard forwarding)\n";
 #endif
     std::cout << std::endl;
 }
@@ -470,6 +469,25 @@ int main(int argc, char* argv[]) {
 
     CommandHandler cmdHandler(configPath, cfg);
 
+#ifndef _WIN32
+    {
+        std::string cycleSc = args.cycleShortcut;
+        if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
+        if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
+        KeyboardState::SetCycleShortcut(cycleSc);
+
+        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
+            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
+        if (cfg.localShortcut && !cfg.localShortcut->empty())
+            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
+    }
+
+    cmdHandler.SetDisconnectCallback([]() {
+        DEBUG_INFO("MAIN", "Connection lost callback triggered");
+        LinuxKeyboardGrab::NotifyConnectionLost();
+    });
+#endif
+
 #ifdef _WIN32
     {
         std::string cycleSc = args.cycleShortcut;
@@ -597,30 +615,44 @@ int main(int argc, char* argv[]) {
         TrayIcon::Destroy();
     }
 #else
-    DEBUG_INFO("MAIN", "Starting input loop (Linux mode - no keyboard hook)");
+    DEBUG_INFO("MAIN", "Starting Linux keyboard grab loop");
 
     std::thread cmdThread([&cmdHandler]() {
         cmdHandler.RunCommandLoop();
     });
 
     while (!g_shutdown) {
-        if (!cmdHandler.HasDisconnectedSessions()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
+        cmdHandler.UpdateNetworkClients();
+
+        if (!LinuxKeyboardGrab::Install()) {
+            DEBUG_ERROR("MAIN", "Failed to install Linux keyboard grab");
+            g_shutdown = true;
+            break;
         }
+
+        LinuxKeyboardGrab::RunMessageLoop();
+        DEBUG_INFO("MAIN", "Linux keyboard grab loop ended");
+
+        LinuxKeyboardGrab::Uninstall();
 
         if (g_shutdown) break;
 
-        DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
+        DEBUG_INFO("MAIN", "Checking connections...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
+
         cmdHandler.ReconnectAll();
+
+        if (cmdHandler.CountConnectedSessions() == 0 && !g_shutdown) {
+            DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
     }
 
     if (cmdThread.joinable()) {
         cmdThread.join();
     }
 
-    DEBUG_INFO("MAIN", "Input loop ended, starting cleanup");
+    DEBUG_INFO("MAIN", "Linux keyboard grab loop ended, starting cleanup");
 #endif
 
     DEBUG_VERBOSE("MAIN", "Cleaning up speech system");

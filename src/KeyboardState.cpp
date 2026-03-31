@@ -5,18 +5,11 @@
 #include <sstream>
 #include <map>
 
-#ifdef _WIN32
-    #define CTRL_KEY_1 VK_CONTROL
-    #define CTRL_KEY_2 VK_LCONTROL
-    #define CTRL_KEY_3 VK_RCONTROL
-    #define WIN_KEY_1  VK_LWIN
-    #define WIN_KEY_2  VK_RWIN
-#else
-    #define CTRL_KEY_1 0x25
-    #define CTRL_KEY_2 0x69
-    #define WIN_KEY_1  0x85
-    #define WIN_KEY_2  0x86
-#endif
+#define CTRL_KEY_1 VK_CONTROL
+#define CTRL_KEY_2 VK_LCONTROL
+#define CTRL_KEY_3 VK_RCONTROL
+#define WIN_KEY_1  VK_LWIN
+#define WIN_KEY_2  VK_RWIN
 
 bool KeyboardState::g_ctrlPressed = false;
 bool KeyboardState::g_winPressed = false;
@@ -32,11 +25,7 @@ std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
 bool KeyboardState::IsControlKey(NativeKeyType vkCode) {
-#ifdef _WIN32
     return vkCode == CTRL_KEY_1 || vkCode == CTRL_KEY_2 || vkCode == CTRL_KEY_3;
-#else
-    return vkCode == CTRL_KEY_1 || vkCode == CTRL_KEY_2;
-#endif
 }
 
 bool KeyboardState::IsWinKey(NativeKeyType vkCode) {
@@ -78,14 +67,12 @@ bool KeyboardState::CheckGlobalShortcut(const ShortcutConfig& sc, NativeKeyType 
 }
 
 int KeyboardState::CheckToggleShortcut(NativeKeyType vkCode) {
-#ifdef _WIN32
     for (int i = 0; i < static_cast<int>(g_shortcuts.size()); i++) {
         if (MatchesShortcut(g_shortcuts[i], vkCode,
                             g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed)) {
             return i;
         }
     }
-#endif
     return -1;
 }
 

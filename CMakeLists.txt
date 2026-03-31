@@ -88,16 +88,20 @@ set(COMMON_SOURCES
     src/ConfigFile.cpp
     src/CommandHandler.cpp
     src/Input.cpp
+    src/KeyboardState.cpp
+    src/AppState.cpp
+    src/MessageSender.cpp
 )
 
 if(WIN32)
-    list(APPEND COMMON_SOURCES 
-        src/KeyboardState.cpp
-        src/AppState.cpp
+    list(APPEND COMMON_SOURCES
         src/EventChecker.cpp
-        src/MessageSender.cpp
         src/KeyboardHook.cpp
         src/TrayIcon.cpp
+    )
+else()
+    list(APPEND COMMON_SOURCES
+        src/LinuxKeyboardGrab.cpp
     )
 endif()
 

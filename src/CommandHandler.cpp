@@ -7,11 +7,11 @@
 #include <algorithm>
 #include <unordered_map>
 
-#ifdef _WIN32
 #include "MessageSender.h"
 #include "KeyboardState.h"
-#include "KeyboardHook.h"
 #include "AppState.h"
+#ifdef _WIN32
+#include "KeyboardHook.h"
 #include <windows.h>
 extern DWORD g_mainThreadId;
 #endif
@@ -154,12 +154,10 @@ bool CommandHandler::ConnectInteractive() {
         return false;
     }
 
-#ifdef _WIN32
     if (!paramsOpt->shortcut.empty()) {
         KeyboardState::SetToggleShortcutAt(0, paramsOpt->shortcut);
     }
     MessageSender::SetNetworkClient(0, cm->GetClient());
-#endif
 
     ProfileSession session;
     session.config.name = "interactive";
@@ -213,7 +211,6 @@ void CommandHandler::DisconnectSession(int index) {
 }
 
 void CommandHandler::RebuildShortcuts() {
-#ifdef _WIN32
     KeyboardState::ClearShortcuts();
     int shortcutIdx = 0;
     std::vector<int> connectedIndices;
@@ -237,17 +234,14 @@ void CommandHandler::RebuildShortcuts() {
     }
 
     AppState::SetConnectedProfiles(connectedIndices, connectedNames);
-#endif
 }
 
 void CommandHandler::UpdateNetworkClients() {
-#ifdef _WIN32
     for (auto& session : m_sessions) {
         if (session.shortcutIndex >= 0 && session.connection) {
             MessageSender::SetNetworkClient(session.shortcutIndex, session.connection->GetClient());
         }
     }
-#endif
 }
 
 void CommandHandler::ToggleProfile(int index) {
