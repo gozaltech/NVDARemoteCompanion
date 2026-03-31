@@ -45,6 +45,8 @@ private:
     static bool g_exitShortcutSet;
     static ShortcutConfig g_reinstallHookShortcut;
     static bool g_reinstallHookShortcutSet;
+    static ShortcutConfig g_localShortcut;
+    static bool g_localShortcutSet;
 
 public:
     static bool IsControlKey(NativeKeyType vkCode);
@@ -61,6 +63,8 @@ public:
     static void SetReinstallHookShortcut(const std::string& shortcut);
     static bool CheckExitShortcut(NativeKeyType vkCode);
     static bool CheckReinstallHookShortcut(NativeKeyType vkCode);
+    static void SetLocalShortcut(const std::string& shortcut);
+    static bool CheckLocalShortcut(NativeKeyType vkCode);
 
     static void SetToggleShortcut(const std::string& shortcut);
 

@@ -473,6 +473,8 @@ int main(int argc, char* argv[]) {
             KeyboardState::SetExitShortcut(*cfg.exitShortcut);
         if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
             KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
+        if (cfg.localShortcut && !cfg.localShortcut->empty())
+            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
     }
 
     DWORD mainThreadId = GetCurrentThreadId();

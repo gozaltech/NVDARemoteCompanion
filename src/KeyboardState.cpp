@@ -28,6 +28,8 @@ ShortcutConfig KeyboardState::g_exitShortcut;
 bool KeyboardState::g_exitShortcutSet = false;
 ShortcutConfig KeyboardState::g_reinstallHookShortcut;
 bool KeyboardState::g_reinstallHookShortcutSet = false;
+ShortcutConfig KeyboardState::g_localShortcut;
+bool KeyboardState::g_localShortcutSet = false;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
@@ -181,6 +183,21 @@ bool KeyboardState::CheckExitShortcut(NativeKeyType vkCode) {
 bool KeyboardState::CheckReinstallHookShortcut(NativeKeyType vkCode) {
     return g_reinstallHookShortcutSet && MatchesShortcut(g_reinstallHookShortcut, vkCode,
                                                          g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
+}
+
+void KeyboardState::SetLocalShortcut(const std::string& shortcut) {
+    g_localShortcut = ParseShortcutString(shortcut);
+    g_localShortcutSet = (g_localShortcut.key != 0);
+    if (g_localShortcutSet) {
+        DEBUG_INFO_F("KEYS", "Local shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     g_localShortcut.ctrl, g_localShortcut.win, g_localShortcut.alt,
+                     g_localShortcut.shift, g_localShortcut.key);
+    }
+}
+
+bool KeyboardState::CheckLocalShortcut(NativeKeyType vkCode) {
+    return g_localShortcutSet && MatchesShortcut(g_localShortcut, vkCode,
+                                                 g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
 }
 
 void KeyboardState::ClearShortcuts() {

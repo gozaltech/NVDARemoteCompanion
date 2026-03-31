@@ -27,6 +27,12 @@ bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
         return true;
     }
 
+    if (KeyboardState::CheckLocalShortcut(vkCode)) {
+        AppState::GoLocal();
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
     if (KeyboardState::CheckCycleShortcut(vkCode)) {
         AppState::CycleProfile();
         KeyboardState::ResetModifiers();

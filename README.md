@@ -193,6 +193,7 @@ Generate a default config file with:
 | `debug_level` | string | `"warning"` | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
 | `background` | bool | `false` | Run in background mode with system tray (Windows only) |
 | `cycle_shortcut` | string | `"ctrl+alt+f11"` | Shortcut to cycle between profiles and local machine |
+| `local_shortcut` | string | none | Shortcut to immediately return to local machine control from any remote session (Windows only, unset by default) |
 | `exit_shortcut` | string | none | Shortcut to gracefully exit the application (Windows only, unset by default) |
 | `reinstall_hook_shortcut` | string | none | Shortcut to reinstall the keyboard hook (Windows only, unset by default) |
 | `profiles` | array | `[]` | Connection profiles (see below) |
@@ -238,6 +239,7 @@ Both methods work together. Use the cycle shortcut for sequential switching and 
 
 | Shortcut config key | Description |
 |---------------------|-------------|
+| `local_shortcut` | Immediately return to local machine control from any remote session |
 | `exit_shortcut` | Gracefully exit the application |
 | `reinstall_hook_shortcut` | Reinstall the keyboard hook — useful after restarting NVDA, which may push its hook in front of ours and intercept the NVDA modifier key before it reaches this app |
 

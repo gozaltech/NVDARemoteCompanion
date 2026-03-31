@@ -93,3 +93,12 @@ bool AppState::IsReleasingKeys() {
 int AppState::GetActiveProfile() {
     return g_activeProfile;
 }
+
+void AppState::GoLocal() {
+    if (g_activeProfile >= 0) {
+        ReleaseAllKeys();
+        g_activeProfile = -1;
+        Audio::PlayTone(440, 100);
+        Speech::Speak("Local", true);
+    }
+}

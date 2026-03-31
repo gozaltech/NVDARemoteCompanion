@@ -18,4 +18,5 @@ public:
     static void SetConnectedProfiles(const std::vector<int>& indices, const std::vector<std::string>& names);
     static bool IsReleasingKeys();
     static int GetActiveProfile();
+    static void GoLocal();
 };

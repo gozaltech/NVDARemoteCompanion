@@ -20,6 +20,7 @@ struct ConfigFileData {
     std::optional<std::string> cycleShortcut;
     std::optional<std::string> exitShortcut;
     std::optional<std::string> reinstallHookShortcut;
+    std::optional<std::string> localShortcut;
 
     std::vector<ProfileConfig> profiles;
 
