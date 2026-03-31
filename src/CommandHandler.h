@@ -28,6 +28,7 @@ public:
     int GetSessionCount() const { return Config::isize(m_sessions); }
 
     void ReconnectAll();
+    void ToggleProfile(int index);
     void UpdateNetworkClients();
     void SetDisconnectCallback(std::function<void()> callback);
 

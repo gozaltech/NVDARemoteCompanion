@@ -245,6 +245,17 @@ void CommandHandler::UpdateNetworkClients() {
 #endif
 }
 
+void CommandHandler::ToggleProfile(int index) {
+    if (!IsValidSessionIndex(index)) return;
+    auto& session = m_sessions[index];
+    if (session.connection && session.connection->IsConnected()) {
+        DisconnectSession(index);
+    } else {
+        ConnectSession(index);
+    }
+    RebuildShortcuts();
+}
+
 void CommandHandler::ReconnectAll() {
     bool changed = false;
     for (int i = 0; i < Config::isize(m_sessions); i++) {

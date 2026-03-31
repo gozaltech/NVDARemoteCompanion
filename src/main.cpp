@@ -510,6 +510,23 @@ int main(int argc, char* argv[]) {
             DEBUG_ERROR("MAIN", "Failed to create tray icon");
             return 1;
         }
+
+        TrayIcon::SetProfileProvider([&cmdHandler]() {
+            std::vector<TrayProfile> profiles;
+            for (const auto& s : cmdHandler.GetSessions()) {
+                profiles.push_back({s.config.name, s.connection && s.connection->IsConnected()});
+            }
+            return profiles;
+        });
+        TrayIcon::SetProfileToggleCallback([&cmdHandler, &updateTrayTooltip](int index) {
+            cmdHandler.ToggleProfile(index);
+            updateTrayTooltip();
+        });
+        TrayIcon::SetReconnectAllCallback([&cmdHandler, &updateTrayTooltip]() {
+            cmdHandler.ReconnectAll();
+            updateTrayTooltip();
+        });
+
         updateTrayTooltip();
     }
 
