@@ -304,32 +304,121 @@ void CommandHandler::CmdDisconnect(const std::string& args) {
     RebuildShortcuts();
 }
 
-void CommandHandler::CmdAdd(const std::string& args) {
-    std::istringstream ss(args);
-    std::string name, host, key;
-    ss >> name >> host >> key;
+bool CommandHandler::PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue) {
+    if (!defaultValue.empty())
+        std::cout << prompt << " [" << defaultValue << "]: " << std::flush;
+    else
+        std::cout << prompt << ": " << std::flush;
 
-    if (name.empty() || host.empty() || key.empty()) {
-        std::cout << "Usage: add <name> <host> <key> [port] [shortcut] [auto_connect]" << std::endl;
+    std::string line;
+#ifdef _WIN32
+    while (!g_shutdown) {
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == '\r') {
+                std::cout << std::endl;
+                break;
+            } else if (ch == '\b' && !line.empty()) {
+                line.pop_back();
+                std::cout << "\b \b" << std::flush;
+            } else if (ch == 3) {
+                std::cout << std::endl;
+                g_shutdown = true;
+                return false;
+            } else if (ch == 27) {
+                std::cout << std::endl;
+                return false;
+            } else if (ch >= 32 && ch <= 126) {
+                line += static_cast<char>(ch);
+                std::cout << static_cast<char>(ch) << std::flush;
+            }
+        } else {
+            Sleep(10);
+        }
+    }
+    if (g_shutdown) return false;
+#else
+    if (!std::getline(std::cin, line)) {
+        return false;
+    }
+#endif
+    if (line.empty() && !defaultValue.empty())
+        line = defaultValue;
+    out = line;
+    return true;
+}
+
+void CommandHandler::CmdAdd(const std::string& args) {
+    if (!args.empty()) {
+        std::istringstream ss(args);
+        std::string name, host, key;
+        ss >> name >> host >> key;
+
+        if (name.empty() || host.empty() || key.empty()) {
+            std::cout << "Usage: add <name> <host> <key> [port] [shortcut] [auto_connect]" << std::endl;
+            std::cout << "       add  (no arguments for interactive wizard)" << std::endl;
+            return;
+        }
+
+        ProfileConfig p;
+        p.name = name;
+        p.host = host;
+        p.key = key;
+
+        std::string token;
+        if (ss >> token) {
+            try { p.port = std::stoi(token); } catch (...) { p.port = Config::DEFAULT_PORT; }
+        }
+        if (ss >> token) p.shortcut = token;
+        if (ss >> token) {
+            std::transform(token.begin(), token.end(), token.begin(), ::tolower);
+            p.autoConnect = (token == "true" || token == "yes" || token == "1");
+        }
+
+        ProfileSession session;
+        session.config = p;
+        m_sessions.push_back(std::move(session));
+        m_configData.profiles.push_back(p);
+        SaveConfig();
+        std::cout << "Profile added: [" << (m_sessions.size() - 1) << "] " << p.name << std::endl;
         return;
     }
 
-    ProfileConfig p;
-    p.name = name;
-    p.host = host;
-    p.key = key;
+    std::cout << "Adding new profile (press Escape to cancel)" << std::endl;
 
-    std::string token;
-    if (ss >> token) {
-        try { p.port = std::stoi(token); } catch (...) { p.port = Config::DEFAULT_PORT; }
-    }
-    if (ss >> token) {
-        p.shortcut = token;
-    }
-    if (ss >> token) {
-        std::transform(token.begin(), token.end(), token.begin(), ::tolower);
-        p.autoConnect = (token == "true" || token == "yes" || token == "1");
-    }
+    ProfileConfig p;
+    std::string input;
+
+    if (!PromptLine("Name", input)) { std::cout << "Cancelled." << std::endl; return; }
+    if (input.empty()) { std::cout << "Name is required." << std::endl; return; }
+    p.name = input;
+
+    if (!PromptLine("Host", input)) { std::cout << "Cancelled." << std::endl; return; }
+    if (input.empty()) { std::cout << "Host is required." << std::endl; return; }
+    p.host = input;
+
+    if (!PromptLine("Port", input, std::to_string(Config::DEFAULT_PORT))) { std::cout << "Cancelled." << std::endl; return; }
+    try { p.port = input.empty() ? Config::DEFAULT_PORT : std::stoi(input); }
+    catch (...) { std::cout << "Invalid port, using default." << std::endl; p.port = Config::DEFAULT_PORT; }
+
+    if (!PromptLine("Key", input)) { std::cout << "Cancelled." << std::endl; return; }
+    if (input.empty()) { std::cout << "Key is required." << std::endl; return; }
+    p.key = input;
+
+    if (!PromptLine("Shortcut (optional, e.g. ctrl+win+f12)", input, "")) { std::cout << "Cancelled." << std::endl; return; }
+    p.shortcut = input;
+
+    if (!PromptLine("Auto connect (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    p.autoConnect = (input == "y" || input == "yes" || input == "1" || input.empty());
+
+    if (!PromptLine("Speech (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    p.speech = (input == "y" || input == "yes" || input == "1" || input.empty());
+
+    if (!PromptLine("Mute on local control (y/n)", input, "n")) { std::cout << "Cancelled." << std::endl; return; }
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    p.muteOnLocalControl = (input == "y" || input == "yes" || input == "1");
 
     ProfileSession session;
     session.config = p;
@@ -428,8 +517,9 @@ void CommandHandler::CmdHelp() {
     std::cout << "  list (ls)           List all profiles with details" << std::endl;
     std::cout << "  connect [name|idx]  Connect a profile (or all disconnected)" << std::endl;
     std::cout << "  disconnect (dc) <name|idx>  Disconnect a profile" << std::endl;
+    std::cout << "  add                 Add a new profile (interactive wizard)" << std::endl;
     std::cout << "  add <name> <host> <key> [port] [shortcut] [auto_connect]" << std::endl;
-    std::cout << "                      Add a new profile" << std::endl;
+    std::cout << "                      Add a new profile (one-liner)" << std::endl;
     std::cout << "  edit <name|idx> <field> <value>" << std::endl;
     std::cout << "                      Edit a profile field" << std::endl;
     std::cout << "  delete (rm) <name|idx>  Delete a profile" << std::endl;

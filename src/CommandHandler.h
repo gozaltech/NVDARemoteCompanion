@@ -46,6 +46,7 @@ private:
     void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);
+    bool PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue = "");
     void SaveConfig();
     void ConnectSession(int index);
     void DisconnectSession(int index);
