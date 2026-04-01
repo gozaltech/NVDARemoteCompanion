@@ -24,7 +24,6 @@
 #include <chrono>
 #include <unordered_map>
 #include <atomic>
-#include <functional>
 
 static const std::unordered_map<uint32_t, uint32_t>& EvdevToVk() {
     static const std::unordered_map<uint32_t, uint32_t> table = {
@@ -121,7 +120,7 @@ static int g_inotifyFd = -1;
 static int g_inotifyWd = -1;
 static int g_wakeupPipe[2] = {-1, -1};
 
-static std::function<void()> g_reconnectCallback;
+static LinuxKeyboardGrab* s_instance = nullptr;
 
 static std::atomic<bool> g_numlockOn{true};
 
@@ -351,36 +350,8 @@ static void HandleKeyEvent(uint32_t evdevCode, int value) {
     if (isPressed) {
         KeyboardState::UpdateModifierState(vkCode, true);
 
-        if (KeyboardState::CheckExitShortcut(vkCode)) {
-            g_shutdown = true;
+        if (s_instance && s_instance->HandleShortcut(vkCode)) {
             g_repeatKey.active = false;
-            if (g_wakeupPipe[1] >= 0) { char b = 'q'; write(g_wakeupPipe[1], &b, 1); }
-            KeyboardState::ResetModifiers();
-            return;
-        }
-        if (KeyboardState::CheckLocalShortcut(vkCode)) {
-            g_repeatKey.active = false;
-            AppState::GoLocal();
-            KeyboardState::ResetModifiers();
-            return;
-        }
-        if (KeyboardState::CheckReconnectShortcut(vkCode)) {
-            g_repeatKey.active = false;
-            KeyboardState::ResetModifiers();
-            if (g_reconnectCallback) g_reconnectCallback();
-            return;
-        }
-        if (KeyboardState::CheckCycleShortcut(vkCode)) {
-            g_repeatKey.active = false;
-            AppState::CycleProfile();
-            KeyboardState::ResetModifiers();
-            return;
-        }
-        int profileIndex = KeyboardState::CheckToggleShortcut(vkCode);
-        if (profileIndex >= 0) {
-            g_repeatKey.active = false;
-            AppState::ToggleSendingKeys(profileIndex);
-            KeyboardState::ResetModifiers();
             return;
         }
 
@@ -418,7 +389,16 @@ static void HandleKeyEvent(uint32_t evdevCode, int value) {
     }
 }
 
+void LinuxKeyboardGrab::OnExit() {
+    g_shutdown = true;
+    if (g_wakeupPipe[1] >= 0) {
+        char b = 'q';
+        write(g_wakeupPipe[1], &b, 1);
+    }
+}
+
 bool LinuxKeyboardGrab::Install() {
+    s_instance = this;
     if (pipe2(g_wakeupPipe, O_NONBLOCK) < 0) {
         DEBUG_ERROR("LKG", "Failed to create wakeup pipe");
         return false;
@@ -440,6 +420,7 @@ bool LinuxKeyboardGrab::Install() {
 }
 
 void LinuxKeyboardGrab::Uninstall() {
+    s_instance = nullptr;
     g_repeatKey.active = false;
 
     UngrabAll();
@@ -473,10 +454,6 @@ void LinuxKeyboardGrab::NotifyConnectionLost() {
         char b = 'c';
         write(g_wakeupPipe[1], &b, 1);
     }
-}
-
-void LinuxKeyboardGrab::SetReconnectCallback(std::function<void()> callback) {
-    g_reconnectCallback = std::move(callback);
 }
 
 void LinuxKeyboardGrab::RunMessageLoop() {

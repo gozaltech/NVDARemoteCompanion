@@ -5,6 +5,8 @@
 #include "Config.h"
 #include "KeyboardHook.h"
 
+extern DWORD g_mainThreadId;
+
 HWND TrayIcon::s_hwnd = nullptr;
 NOTIFYICONDATAA TrayIcon::s_nid = {};
 UniqueMenu TrayIcon::s_menu;
@@ -71,7 +73,8 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             PostQuitMessage(0);
         } else if (id == ID_TRAY_REINSTALL_HOOK) {
             DEBUG_INFO("TRAY", "Reinstall keyboard hook requested from tray menu");
-            KeyboardHook::Reinstall();
+            if (g_mainThreadId != 0)
+                PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
         } else if (id == ID_TRAY_RECONNECT_ALL) {
             DEBUG_INFO("TRAY", "Reconnect all requested from tray menu");
             if (s_reconnectAllCallback) s_reconnectAllCallback();
@@ -166,7 +169,8 @@ void TrayIcon::RunMessageLoop() {
         }
         if (msg.message == WM_REINSTALL_HOOK) {
             DEBUG_INFO("TRAY", "Reinstall keyboard hook message received");
-            KeyboardHook::Reinstall();
+            if (g_mainThreadId != 0)
+                PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
             continue;
         }
         TranslateMessage(&msg);

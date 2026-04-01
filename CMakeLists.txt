@@ -89,6 +89,7 @@ set(COMMON_SOURCES
     src/CommandHandler.cpp
     src/Input.cpp
     src/KeyboardState.cpp
+    src/KeyboardHandler.cpp
     src/AppState.cpp
     src/MessageSender.cpp
 )
