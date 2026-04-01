@@ -343,6 +343,7 @@ int main(int argc, char* argv[]) {
     ConfigFileData cfg;
     std::string configPath = ConfigFile::FindConfigFile(args.configPath);
     if (!configPath.empty()) {
+        ConfigFile::Migrate(configPath);
         cfg = ConfigFile::Load(configPath);
         if (cfg.background.has_value() && *cfg.background && !args.backgroundMode && !args.noBackground) {
             args.backgroundMode = true;
