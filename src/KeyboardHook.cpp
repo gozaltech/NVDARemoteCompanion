@@ -5,54 +5,28 @@
 #include "KeyEvent.h"
 #include "MessageSender.h"
 #include "Debug.h"
-#include <thread>
-#include <chrono>
 
+extern DWORD g_mainThreadId;
 
-HHOOK KeyboardHook::g_keyboardHook = nullptr;
+HHOOK KeyboardHook::s_hook = nullptr;
+KeyboardHook* KeyboardHook::s_instance = nullptr;
 
-bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
-    if (KeyboardState::CheckExitShortcut(vkCode)) {
-        g_shutdown = true;
-        PostQuitMessage(0);
-        KeyboardState::ResetModifiers();
-        return true;
-    }
+void KeyboardHook::OnExit() {
+    g_shutdown = true;
+    PostQuitMessage(0);
+}
 
-    if (KeyboardState::CheckReinstallHookShortcut(vkCode)) {
-        Reinstall();
-        KeyboardState::ResetModifiers();
-        return true;
-    }
-
-    if (KeyboardState::CheckLocalShortcut(vkCode)) {
-        AppState::GoLocal();
-        KeyboardState::ResetModifiers();
-        return true;
-    }
-
-    if (KeyboardState::CheckCycleShortcut(vkCode)) {
-        AppState::CycleProfile();
-        KeyboardState::ResetModifiers();
-        return true;
-    }
-
-    int profileIndex = KeyboardState::CheckToggleShortcut(vkCode);
-    if (profileIndex >= 0) {
-        AppState::ToggleSendingKeys(profileIndex);
-        KeyboardState::ResetModifiers();
-        return true;
-    }
-    return false;
+void KeyboardHook::OnReinstallHook() {
+    if (g_mainThreadId != 0)
+        PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
 }
 
 LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode, bool isExtended) {
     if (EventChecker::IsKeyDownEvent(wParam)) {
         KeyboardState::UpdateModifierState(vkCode, true);
 
-        if (HandleToggleShortcut(vkCode)) {
+        if (s_instance && s_instance->HandleShortcut(vkCode))
             return 1;
-        }
 
         if (AppState::IsSendingKeys() || AppState::IsReleasingKeys()) {
             if (AppState::IsSendingKeys()) {
@@ -69,9 +43,8 @@ LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode
         KeyboardState::UpdateModifierState(vkCode, false);
 
         if (AppState::IsSendingKeys() || AppState::IsReleasingKeys()) {
-            auto pressedKeys = KeyboardState::GetAllPressedKeys();
             bool isTracked = false;
-            for (const auto& pk : pressedKeys) {
+            for (const auto& pk : KeyboardState::GetAllPressedKeys()) {
                 if (pk.vkCode == vkCode) { isTracked = true; break; }
             }
             if (isTracked) {
@@ -80,7 +53,6 @@ LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode
                 MessageSender::SendKeyEvent(keyEvent);
                 return 1;
             }
-            return 0;
         }
         return 0;
     }
@@ -89,34 +61,29 @@ LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode
 }
 
 LRESULT CALLBACK KeyboardHook::LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode < 0) {
-        return CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
-    }
+    if (nCode < 0)
+        return CallNextHookEx(s_hook, nCode, wParam, lParam);
 
-    KBDLLHOOKSTRUCT* pKeyboard = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
-    DWORD vkCode = pKeyboard->vkCode;
-    WORD scanCode = static_cast<WORD>(pKeyboard->scanCode);
-    bool isExtended = (pKeyboard->flags & LLKHF_EXTENDED) != 0;
-
-    LRESULT result = ProcessKeyEvent(wParam, vkCode, scanCode, isExtended);
-    return result ? result : CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
+    KBDLLHOOKSTRUCT* kb = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+    LRESULT result = ProcessKeyEvent(wParam, kb->vkCode,
+                                     static_cast<WORD>(kb->scanCode),
+                                     (kb->flags & LLKHF_EXTENDED) != 0);
+    return result ? result : CallNextHookEx(s_hook, nCode, wParam, lParam);
 }
 
 bool KeyboardHook::Install() {
-    g_keyboardHook = SetWindowsHookEx(
-        WH_KEYBOARD_LL,
-        LowLevelKeyboardProc,
-        GetModuleHandle(nullptr),
-        0
-    );
-    return g_keyboardHook != nullptr;
+    s_instance = this;
+    s_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,
+                               GetModuleHandle(nullptr), 0);
+    return s_hook != nullptr;
 }
 
 void KeyboardHook::Uninstall() {
-    if (g_keyboardHook) {
-        UnhookWindowsHookEx(g_keyboardHook);
-        g_keyboardHook = nullptr;
+    if (s_hook) {
+        UnhookWindowsHookEx(s_hook);
+        s_hook = nullptr;
     }
+    s_instance = nullptr;
 }
 
 void KeyboardHook::Reinstall() {
@@ -129,25 +96,34 @@ void KeyboardHook::Reinstall() {
     }
 }
 
+void KeyboardHook::NotifyConnectionLost() {
+    if (g_mainThreadId != 0)
+        PostThreadMessage(g_mainThreadId, WM_CONNECTION_LOST, 0, 0);
+}
+
 void KeyboardHook::RunMessageLoop() {
     MSG msg;
     DEBUG_INFO("HOOK", "Starting message loop");
 
     while (!g_shutdown) {
         BOOL hasMessage = PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE);
-
         if (hasMessage) {
             if (msg.message == WM_QUIT) {
-                DEBUG_INFO("HOOK", "Received WM_QUIT message");
+                DEBUG_INFO("HOOK", "Received WM_QUIT");
                 break;
             }
             if (msg.message == WM_CONNECTION_LOST) {
-                DEBUG_INFO("HOOK", "Received WM_CONNECTION_LOST message, breaking loop");
+                DEBUG_INFO("HOOK", "Received WM_CONNECTION_LOST, breaking loop");
                 break;
             }
             if (msg.message == WM_REINSTALL_HOOK) {
-                DEBUG_INFO("HOOK", "Received WM_REINSTALL_HOOK message");
+                DEBUG_INFO("HOOK", "Received WM_REINSTALL_HOOK");
                 Reinstall();
+                continue;
+            }
+            if (msg.message == WM_RECONNECT_ALL) {
+                DEBUG_INFO("HOOK", "Received WM_RECONNECT_ALL");
+                if (m_reconnectCallback) m_reconnectCallback();
                 continue;
             }
             TranslateMessage(&msg);
@@ -156,5 +132,5 @@ void KeyboardHook::RunMessageLoop() {
             Sleep(1);
         }
     }
-    DEBUG_INFO("HOOK", "Message loop terminated due to shutdown flag");
+    DEBUG_INFO("HOOK", "Message loop ended");
 }

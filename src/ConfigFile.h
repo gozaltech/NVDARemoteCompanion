@@ -12,7 +12,7 @@ namespace ProfileFields {
     constexpr const char* AUTO_CONNECT          = "auto_connect";
     constexpr const char* SPEECH                = "speech";
     constexpr const char* MUTE_ON_LOCAL_CONTROL = "mute_on_local_control";
-    constexpr const char* FORWARD_AUDIO         = "forward_audio";
+    constexpr const char* FORWARD_AUDIO         = "forward_nvda_sounds";
 }
 
 struct ProfileConfig {
@@ -35,6 +35,7 @@ struct ConfigFileData {
     std::optional<std::string> exitShortcut;
     std::optional<std::string> reinstallHookShortcut;
     std::optional<std::string> localShortcut;
+    std::optional<std::string> reconnectShortcut;
 
     std::vector<ProfileConfig> profiles;
 
@@ -47,6 +48,7 @@ struct ConfigFileData {
 namespace ConfigFile {
     std::string DefaultPath();
     std::string FindConfigFile(const std::string& explicitPath = "");
+    bool Migrate(const std::string& path);
     ConfigFileData Load(const std::string& path);
     bool CreateDefault(const std::string& path);
     bool Save(const std::string& path, const ConfigFileData& data);

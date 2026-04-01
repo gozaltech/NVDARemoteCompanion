@@ -13,17 +13,17 @@
 #include "Speech.h"
 #include "Config.h"
 
+#include "KeyboardState.h"
+#include "KeyboardHandler.h"
 #ifdef _WIN32
     #include "MessageSender.h"
     #include "KeyboardHook.h"
-    #include "KeyboardState.h"
     #include "TrayIcon.h"
     #include <windows.h>
     #include <io.h>
     #include <fcntl.h>
 #else
     #include "LinuxKeyboardGrab.h"
-    #include "KeyboardState.h"
     #include <unistd.h>
 #endif
 
@@ -343,6 +343,7 @@ int main(int argc, char* argv[]) {
     ConfigFileData cfg;
     std::string configPath = ConfigFile::FindConfigFile(args.configPath);
     if (!configPath.empty()) {
+        ConfigFile::Migrate(configPath);
         cfg = ConfigFile::Load(configPath);
         if (cfg.background.has_value() && *cfg.background && !args.backgroundMode && !args.noBackground) {
             args.backgroundMode = true;
@@ -469,7 +470,6 @@ int main(int argc, char* argv[]) {
 
     CommandHandler cmdHandler(configPath, cfg);
 
-#ifndef _WIN32
     {
         std::string cycleSc = args.cycleShortcut;
         if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
@@ -480,35 +480,29 @@ int main(int argc, char* argv[]) {
             KeyboardState::SetExitShortcut(*cfg.exitShortcut);
         if (cfg.localShortcut && !cfg.localShortcut->empty())
             KeyboardState::SetLocalShortcut(*cfg.localShortcut);
-    }
-
-    cmdHandler.SetDisconnectCallback([]() {
-        DEBUG_INFO("MAIN", "Connection lost callback triggered");
-        LinuxKeyboardGrab::NotifyConnectionLost();
-    });
-#endif
-
+        if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+            KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
 #ifdef _WIN32
-    {
-        std::string cycleSc = args.cycleShortcut;
-        if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
-        if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
-        KeyboardState::SetCycleShortcut(cycleSc);
-
-        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
-            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
         if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
             KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
-        if (cfg.localShortcut && !cfg.localShortcut->empty())
-            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
+#endif
     }
 
-    DWORD mainThreadId = GetCurrentThreadId();
-    cmdHandler.SetDisconnectCallback([mainThreadId]() {
-        DEBUG_INFO("MAIN", "Connection lost callback triggered");
-        PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
-    });
+#ifdef _WIN32
+    auto keyboard = std::make_unique<KeyboardHook>();
+#else
+    auto keyboard = std::make_unique<LinuxKeyboardGrab>();
 #endif
+
+    cmdHandler.SetDisconnectCallback([&keyboard]() {
+        DEBUG_INFO("MAIN", "Connection lost callback triggered");
+        keyboard->NotifyConnectionLost();
+    });
+
+    keyboard->SetReconnectCallback([&cmdHandler]() {
+        DEBUG_INFO("MAIN", "Reconnect all shortcut triggered");
+        cmdHandler.ReconnectAll();
+    });
 
     if (cfg.profiles.empty()) {
         if (!cmdHandler.ConnectInteractive()) {
@@ -536,12 +530,10 @@ int main(int argc, char* argv[]) {
             DEBUG_ERROR("MAIN", "Failed to create tray icon");
             return 1;
         }
-
         TrayIcon::SetProfileProvider([&cmdHandler]() {
             std::vector<TrayProfile> profiles;
-            for (const auto& s : cmdHandler.GetSessions()) {
+            for (const auto& s : cmdHandler.GetSessions())
                 profiles.push_back({s.config.name, s.connection && s.connection->IsConnected()});
-            }
             return profiles;
         });
         TrayIcon::SetProfileToggleCallback([&cmdHandler, &updateTrayTooltip](int index) {
@@ -552,90 +544,43 @@ int main(int argc, char* argv[]) {
             cmdHandler.ReconnectAll();
             updateTrayTooltip();
         });
-
         updateTrayTooltip();
     }
+#endif
 
     std::thread cmdThread;
-    if (!isTrayMode) {
-        cmdThread = std::thread([&cmdHandler]() {
-            cmdHandler.RunCommandLoop();
-        });
-    }
+#ifdef _WIN32
+    if (!isTrayMode)
+#endif
+    cmdThread = std::thread([&cmdHandler]() { cmdHandler.RunCommandLoop(); });
 
     while (!g_shutdown) {
         cmdHandler.UpdateNetworkClients();
 
-        if (!KeyboardHook::Install()) {
+        if (!keyboard->Install()) {
+            DEBUG_ERROR("MAIN", "Failed to install keyboard handler");
+#ifdef _WIN32
             if (isTrayMode) TrayIcon::Destroy();
+#endif
             g_shutdown = true;
             break;
         }
 
-        if (isTrayMode) {
+#ifdef _WIN32
+        if (isTrayMode)
             TrayIcon::RunMessageLoop();
-        } else {
-            KeyboardHook::RunMessageLoop();
-        }
-        DEBUG_INFO("MAIN", "Message loop ended");
+        else
+#endif
+            keyboard->RunMessageLoop();
 
-        DEBUG_VERBOSE("MAIN", "Uninstalling keyboard hook");
-        KeyboardHook::Uninstall();
-        DEBUG_VERBOSE("MAIN", "Keyboard hook uninstalled");
+        keyboard->Uninstall();
 
         if (g_shutdown) break;
 
-        if (isTrayMode) {
+#ifdef _WIN32
+        if (isTrayMode)
             TrayIcon::SetTooltip(std::string(Config::APP_NAME) + " - Reconnecting...");
-        }
-
-        DEBUG_INFO("MAIN", "Checking connections...");
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-
-        cmdHandler.ReconnectAll();
-
-        bool anyConnected = cmdHandler.CountConnectedSessions() > 0;
-
-        if (!anyConnected && !g_shutdown) {
-            DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            continue;
-        }
-
-        if (isTrayMode) {
-            updateTrayTooltip();
-        }
-    }
-
-    if (!isTrayMode && cmdThread.joinable()) {
-        cmdThread.join();
-    }
-
-    if (isTrayMode) {
-        TrayIcon::Destroy();
-    }
-#else
-    DEBUG_INFO("MAIN", "Starting Linux keyboard grab loop");
-
-    std::thread cmdThread([&cmdHandler]() {
-        cmdHandler.RunCommandLoop();
-    });
-
-    while (!g_shutdown) {
-        cmdHandler.UpdateNetworkClients();
-
-        if (!LinuxKeyboardGrab::Install()) {
-            DEBUG_ERROR("MAIN", "Failed to install Linux keyboard grab");
-            g_shutdown = true;
-            break;
-        }
-
-        LinuxKeyboardGrab::RunMessageLoop();
-        DEBUG_INFO("MAIN", "Linux keyboard grab loop ended");
-
-        LinuxKeyboardGrab::Uninstall();
-
-        if (g_shutdown) break;
+#endif
 
         DEBUG_INFO("MAIN", "Checking connections...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -646,13 +591,16 @@ int main(int argc, char* argv[]) {
             DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
+
+#ifdef _WIN32
+        if (isTrayMode) updateTrayTooltip();
+#endif
     }
 
-    if (cmdThread.joinable()) {
-        cmdThread.join();
-    }
+    if (cmdThread.joinable()) cmdThread.join();
 
-    DEBUG_INFO("MAIN", "Linux keyboard grab loop ended, starting cleanup");
+#ifdef _WIN32
+    if (isTrayMode) TrayIcon::Destroy();
 #endif
 
     DEBUG_VERBOSE("MAIN", "Cleaning up speech system");

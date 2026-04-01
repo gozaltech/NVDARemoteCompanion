@@ -35,6 +35,7 @@ static std::string GetPlatformConfigDir() {
 }
 
 static constexpr const char* CONFIG_FILENAME = "nvdaremote.json";
+static constexpr int CURRENT_SCHEMA_VERSION = 1;
 
 template<typename T>
 static void ReadJson(const nlohmann::json& j, const char* key, std::optional<T>& out) {
@@ -101,6 +102,48 @@ static ProfileConfig ParseProfile(const nlohmann::json& j) {
     return p;
 }
 
+static void Migrate_0_to_1(nlohmann::json& j) {
+    nlohmann::json sc = nlohmann::json::object();
+    auto move = [&](const char* oldKey, const char* newKey) {
+        if (j.contains(oldKey)) {
+            sc[newKey] = j[oldKey];
+            j.erase(oldKey);
+        }
+    };
+    move("cycle_shortcut",          "cycle");
+    move("exit_shortcut",           "exit");
+    move("reinstall_hook_shortcut", "reinstall_hook");
+    move("local_shortcut",          "local");
+    move("reconnect_shortcut",      "reconnect");
+    if (!sc.empty() || !j.contains("shortcuts")) {
+        j["shortcuts"] = std::move(sc);
+    }
+}
+
+bool ConfigFile::Migrate(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) return false;
+
+    nlohmann::json j;
+    try { j = nlohmann::json::parse(in); }
+    catch (...) { return false; }
+    in.close();
+
+    int version = j.value("schema_version", 0);
+    if (version >= CURRENT_SCHEMA_VERSION) return false;
+
+    if (version < 1) { Migrate_0_to_1(j); version = 1; }
+
+    j["schema_version"] = CURRENT_SCHEMA_VERSION;
+
+    std::ofstream out(path);
+    if (!out.is_open()) return false;
+    out << j.dump(4) << std::endl;
+
+    DEBUG_INFO_F("CONFIG", "Config migrated to schema v{}", CURRENT_SCHEMA_VERSION);
+    return true;
+}
+
 ConfigFileData ConfigFile::Load(const std::string& path) {
     ConfigFileData data;
     if (path.empty()) return data;
@@ -114,13 +157,18 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
     try {
         nlohmann::json j = nlohmann::json::parse(file);
 
-        ReadJson(j, "debug_level",              data.debugLevel);
-        ReadJson(j, "background",               data.background);
-        ReadJson(j, "audio",                    data.audio);
-        ReadJson(j, "cycle_shortcut",           data.cycleShortcut);
-        ReadJson(j, "exit_shortcut",            data.exitShortcut);
-        ReadJson(j, "reinstall_hook_shortcut",  data.reinstallHookShortcut);
-        ReadJson(j, "local_shortcut",           data.localShortcut);
+        ReadJson(j, "debug_level", data.debugLevel);
+        ReadJson(j, "background",  data.background);
+        ReadJson(j, "audio",       data.audio);
+
+        if (j.contains("shortcuts") && j["shortcuts"].is_object()) {
+            const auto& sc = j["shortcuts"];
+            ReadJson(sc, "cycle",          data.cycleShortcut);
+            ReadJson(sc, "exit",           data.exitShortcut);
+            ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
+            ReadJson(sc, "local",          data.localShortcut);
+            ReadJson(sc, "reconnect",      data.reconnectShortcut);
+        }
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
             for (const auto& pj : j["profiles"]) {
@@ -162,10 +210,13 @@ bool ConfigFile::CreateDefault(const std::string& path) {
     }
 
     nlohmann::ordered_json j = {
+        {"schema_version", CURRENT_SCHEMA_VERSION},
         {"debug_level", "warning"},
         {"background", false},
         {"audio", true},
-        {"cycle_shortcut", "ctrl+alt+f11"},
+        {"shortcuts", nlohmann::ordered_json({
+            {"cycle", "ctrl+alt+f11"}
+        })},
         {"profiles", nlohmann::ordered_json::array({
             nlohmann::ordered_json({
                 {"name", "default"},
@@ -176,7 +227,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
                 {"auto_connect", true},
                 {"speech", true},
                 {"mute_on_local_control", false},
-                {"forward_audio", true}
+                {"forward_nvda_sounds", true}
             })
         })}
     };
@@ -191,13 +242,19 @@ bool ConfigFile::CreateDefault(const std::string& path) {
 bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     nlohmann::ordered_json j;
 
+    j["schema_version"] = CURRENT_SCHEMA_VERSION;
     j["debug_level"] = data.debugLevel.value_or("warning");
     j["background"] = data.background.value_or(false);
     j["audio"] = data.audio.value_or(true);
-    j["cycle_shortcut"] = data.cycleShortcut.value_or("ctrl+alt+f11");
-    if (data.exitShortcut) j["exit_shortcut"] = *data.exitShortcut;
-    if (data.reinstallHookShortcut) j["reinstall_hook_shortcut"] = *data.reinstallHookShortcut;
-    if (data.localShortcut) j["local_shortcut"] = *data.localShortcut;
+    {
+        nlohmann::ordered_json sc;
+        sc["cycle"] = data.cycleShortcut.value_or("ctrl+alt+f11");
+        if (data.exitShortcut)           sc["exit"]           = *data.exitShortcut;
+        if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
+        if (data.localShortcut)          sc["local"]          = *data.localShortcut;
+        if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
+        j["shortcuts"] = std::move(sc);
+    }
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {
@@ -214,6 +271,12 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         profilesArr.push_back(std::move(pj));
     }
     j["profiles"] = std::move(profilesArr);
+
+    fs::path filePath(path);
+    if (filePath.has_parent_path()) {
+        std::error_code ec;
+        fs::create_directories(filePath.parent_path(), ec);
+    }
 
     std::ofstream file(path);
     if (!file.is_open()) return false;

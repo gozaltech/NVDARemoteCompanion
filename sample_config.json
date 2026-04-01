@@ -1,0 +1,48 @@
+{
+    "schema_version": 1,
+    "debug_level": "info",
+    "background": false,
+    "audio": true,
+    "shortcuts": {
+        "cycle": "ctrl+alt+f11",
+        "exit": "ctrl+alt+f12",
+        "reinstall_hook": "ctrl+alt+f10",
+        "local": "ctrl+alt+f9",
+        "reconnect": "ctrl+alt+f8"
+    },
+    "profiles": [
+        {
+            "name": "Work PC",
+            "host": "nvdaremote.example.com",
+            "port": 6837,
+            "key": "secretkey123",
+            "shortcut": "ctrl+win+f11",
+            "auto_connect": true,
+            "speech": true,
+            "mute_on_local_control": false,
+            "forward_nvda_sounds": true
+        },
+        {
+            "name": "Home PC",
+            "host": "192.168.1.100",
+            "port": 6837,
+            "key": "homekey456",
+            "shortcut": "ctrl+win+f12",
+            "auto_connect": false,
+            "speech": true,
+            "mute_on_local_control": true,
+            "forward_nvda_sounds": false
+        },
+        {
+            "name": "No Speech Profile",
+            "host": "other.example.com",
+            "port": 6837,
+            "key": "otherkey789",
+            "shortcut": "ctrl+win+f10",
+            "auto_connect": false,
+            "speech": false,
+            "mute_on_local_control": false,
+            "forward_nvda_sounds": true
+        }
+    ]
+}

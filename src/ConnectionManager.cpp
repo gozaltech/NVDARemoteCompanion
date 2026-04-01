@@ -155,7 +155,10 @@ bool ConnectionManager::Reconnect() {
         DEBUG_ERROR("CONN", "Cannot reconnect - no connection parameters available");
         return false;
     }
+    auto savedCallback = m_disconnectCallback;
+    SetDisconnectCallback(nullptr);
     Disconnect();
+    SetDisconnectCallback(savedCallback);
     return EstablishConnectionInternal();
 }
 
@@ -209,6 +212,7 @@ bool ConnectionManager::IsConnected() const {
 }
 
 void ConnectionManager::SetDisconnectCallback(std::function<void()> callback) {
+    m_disconnectCallback = callback;
     if (m_client) {
         m_client->SetDisconnectCallback(callback);
     }

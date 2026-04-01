@@ -1,17 +1,18 @@
 #pragma once
 #ifndef _WIN32
 
-#include <atomic>
+#include "KeyboardHandler.h"
 
-extern std::atomic<bool> g_shutdown;
-
-class LinuxKeyboardGrab {
+class LinuxKeyboardGrab : public KeyboardHandler {
 public:
-    static bool Install();
-    static void Uninstall();
-    static void Reinstall();
-    static void RunMessageLoop();
-    static void NotifyConnectionLost();
+    bool Install() override;
+    void Uninstall() override;
+    void Reinstall() override;
+    void RunMessageLoop() override;
+    void NotifyConnectionLost() override;
+
+protected:
+    void OnExit() override;
 };
 
 #endif

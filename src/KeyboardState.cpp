@@ -21,6 +21,7 @@ ShortcutConfig KeyboardState::g_cycleShortcut;
 ShortcutConfig KeyboardState::g_exitShortcut;
 ShortcutConfig KeyboardState::g_reinstallHookShortcut;
 ShortcutConfig KeyboardState::g_localShortcut;
+ShortcutConfig KeyboardState::g_reconnectShortcut;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
@@ -127,6 +128,14 @@ void KeyboardState::SetLocalShortcut(const std::string& shortcut) {
 
 bool KeyboardState::CheckLocalShortcut(NativeKeyType vkCode) {
     return CheckGlobalShortcut(g_localShortcut, vkCode);
+}
+
+void KeyboardState::SetReconnectShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_reconnectShortcut, shortcut, "Reconnect");
+}
+
+bool KeyboardState::CheckReconnectShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_reconnectShortcut, vkCode);
 }
 
 static NativeKeyType ParseKey(const std::string& keyName) {

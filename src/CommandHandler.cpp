@@ -256,20 +256,11 @@ void CommandHandler::ToggleProfile(int index) {
 }
 
 void CommandHandler::ReconnectAll() {
-    bool changed = false;
     for (int i = 0; i < Config::isize(m_sessions); i++) {
-        auto& session = m_sessions[i];
-        if (session.connection && !session.connection->IsConnected()) {
-            DEBUG_INFO_F("MAIN", "Reconnecting profile '{}'...", session.config.name);
-            if (session.connection->Reconnect()) {
-                DEBUG_INFO_F("MAIN", "Profile '{}' reconnected", session.config.name);
-                changed = true;
-            }
-        }
+        DisconnectSession(i);
+        ConnectSession(i);
     }
-    if (changed) {
-        RebuildShortcuts();
-    }
+    RebuildShortcuts();
 }
 
 void CommandHandler::RunCommandLoop() {
@@ -366,7 +357,7 @@ void CommandHandler::CmdList() {
                   << " | auto_connect=" << (p.autoConnect ? "yes" : "no")
                   << " | speech=" << (p.speech ? "yes" : "no")
                   << " | mute_on_local_control=" << (p.muteOnLocalControl ? "yes" : "no")
-                  << " | forward_audio=" << (p.forwardAudio ? "yes" : "no")
+                  << " | forward_nvda_sounds=" << (p.forwardAudio ? "yes" : "no")
                   << std::endl;
     }
 }
@@ -487,7 +478,7 @@ void CommandHandler::CmdAdd(const std::string& args) {
     if (!PromptLine("Mute on local control (y/n)", input, "n")) { std::cout << "Cancelled." << std::endl; return; }
     p.muteOnLocalControl = Config::StringToBool(input);
 
-    if (!PromptLine("Forward audio from remote (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
+    if (!PromptLine("Forward NVDA sounds from remote (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
     p.forwardAudio = input.empty() ? true : Config::StringToBool(input, true);
 
     ProfileSession session;
@@ -507,7 +498,7 @@ void CommandHandler::CmdEdit(const std::string& args) {
 
     if (target.empty() || field.empty() || value.empty()) {
         std::cout << "Usage: edit <name or index> <field> <value>" << std::endl;
-        std::cout << "Fields: name, host, port, key, shortcut, auto_connect, speech, mute_on_local_control, forward_audio" << std::endl;
+        std::cout << "Fields: name, host, port, key, shortcut, auto_connect, speech, mute_on_local_control, forward_nvda_sounds" << std::endl;
         return;
     }
 
@@ -544,7 +535,7 @@ void CommandHandler::CmdEdit(const std::string& args) {
             if (s.connection) s.connection->SetMuteOnLocalControl(s.config.muteOnLocalControl);
             return true;
         }},
-        {"forward_audio", [](ProfileSession& s, const std::string& v) {
+        {"forward_nvda_sounds", [](ProfileSession& s, const std::string& v) {
             s.config.forwardAudio = Config::StringToBool(v);
             if (s.connection) s.connection->SetForwardAudioEnabled(s.config.forwardAudio);
             return true;
