@@ -12,7 +12,7 @@ namespace ProfileFields {
     constexpr const char* AUTO_CONNECT          = "auto_connect";
     constexpr const char* SPEECH                = "speech";
     constexpr const char* MUTE_ON_LOCAL_CONTROL = "mute_on_local_control";
-    constexpr const char* FORWARD_AUDIO         = "forward_audio";
+    constexpr const char* FORWARD_AUDIO         = "forward_nvda_sounds";
 }
 
 struct ProfileConfig {

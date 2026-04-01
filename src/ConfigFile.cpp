@@ -177,7 +177,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
                 {"auto_connect", true},
                 {"speech", true},
                 {"mute_on_local_control", false},
-                {"forward_audio", true}
+                {"forward_nvda_sounds", true}
             })
         })}
     };
