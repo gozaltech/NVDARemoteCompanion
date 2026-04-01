@@ -1,9 +1,11 @@
 #pragma once
 #include <windows.h>
 #include <atomic>
+#include <functional>
 
 constexpr UINT WM_CONNECTION_LOST = WM_USER + 1;
 constexpr UINT WM_REINSTALL_HOOK  = WM_USER + 2;
+constexpr UINT WM_RECONNECT_ALL   = WM_USER + 3;
 
 extern std::atomic<bool> g_shutdown;
 
@@ -19,4 +21,5 @@ public:
     static void Uninstall();
     static void Reinstall();
     static void RunMessageLoop();
+    static void SetReconnectAllCallback(std::function<void()> callback);
 };

@@ -35,6 +35,7 @@ struct ConfigFileData {
     std::optional<std::string> exitShortcut;
     std::optional<std::string> reinstallHookShortcut;
     std::optional<std::string> localShortcut;
+    std::optional<std::string> reconnectShortcut;
 
     std::vector<ProfileConfig> profiles;
 

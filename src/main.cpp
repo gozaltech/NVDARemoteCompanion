@@ -480,11 +480,18 @@ int main(int argc, char* argv[]) {
             KeyboardState::SetExitShortcut(*cfg.exitShortcut);
         if (cfg.localShortcut && !cfg.localShortcut->empty())
             KeyboardState::SetLocalShortcut(*cfg.localShortcut);
+        if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+            KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
     }
 
     cmdHandler.SetDisconnectCallback([]() {
         DEBUG_INFO("MAIN", "Connection lost callback triggered");
         LinuxKeyboardGrab::NotifyConnectionLost();
+    });
+
+    LinuxKeyboardGrab::SetReconnectCallback([&cmdHandler]() {
+        DEBUG_INFO("MAIN", "Reconnect all shortcut triggered");
+        cmdHandler.ReconnectAll();
     });
 #endif
 
@@ -501,6 +508,8 @@ int main(int argc, char* argv[]) {
             KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
         if (cfg.localShortcut && !cfg.localShortcut->empty())
             KeyboardState::SetLocalShortcut(*cfg.localShortcut);
+        if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+            KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
     }
 
     DWORD mainThreadId = GetCurrentThreadId();
@@ -555,6 +564,11 @@ int main(int argc, char* argv[]) {
 
         updateTrayTooltip();
     }
+
+    KeyboardHook::SetReconnectAllCallback([&cmdHandler, &updateTrayTooltip]() {
+        cmdHandler.ReconnectAll();
+        updateTrayTooltip();
+    });
 
     std::thread cmdThread;
     if (!isTrayMode) {

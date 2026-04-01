@@ -24,6 +24,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <atomic>
+#include <functional>
 
 static const std::unordered_map<uint32_t, uint32_t>& EvdevToVk() {
     static const std::unordered_map<uint32_t, uint32_t> table = {
@@ -119,6 +120,8 @@ static int g_uinputFd = -1;
 static int g_inotifyFd = -1;
 static int g_inotifyWd = -1;
 static int g_wakeupPipe[2] = {-1, -1};
+
+static std::function<void()> g_reconnectCallback;
 
 static std::atomic<bool> g_numlockOn{true};
 
@@ -361,6 +364,12 @@ static void HandleKeyEvent(uint32_t evdevCode, int value) {
             KeyboardState::ResetModifiers();
             return;
         }
+        if (KeyboardState::CheckReconnectShortcut(vkCode)) {
+            g_repeatKey.active = false;
+            KeyboardState::ResetModifiers();
+            if (g_reconnectCallback) g_reconnectCallback();
+            return;
+        }
         if (KeyboardState::CheckCycleShortcut(vkCode)) {
             g_repeatKey.active = false;
             AppState::CycleProfile();
@@ -464,6 +473,10 @@ void LinuxKeyboardGrab::NotifyConnectionLost() {
         char b = 'c';
         write(g_wakeupPipe[1], &b, 1);
     }
+}
+
+void LinuxKeyboardGrab::SetReconnectCallback(std::function<void()> callback) {
+    g_reconnectCallback = std::move(callback);
 }
 
 void LinuxKeyboardGrab::RunMessageLoop() {

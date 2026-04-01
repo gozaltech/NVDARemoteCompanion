@@ -121,6 +121,7 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
         ReadJson(j, "exit_shortcut",            data.exitShortcut);
         ReadJson(j, "reinstall_hook_shortcut",  data.reinstallHookShortcut);
         ReadJson(j, "local_shortcut",           data.localShortcut);
+        ReadJson(j, "reconnect_shortcut",       data.reconnectShortcut);
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
             for (const auto& pj : j["profiles"]) {
@@ -198,6 +199,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     if (data.exitShortcut) j["exit_shortcut"] = *data.exitShortcut;
     if (data.reinstallHookShortcut) j["reinstall_hook_shortcut"] = *data.reinstallHookShortcut;
     if (data.localShortcut) j["local_shortcut"] = *data.localShortcut;
+    if (data.reconnectShortcut) j["reconnect_shortcut"] = *data.reconnectShortcut;
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {

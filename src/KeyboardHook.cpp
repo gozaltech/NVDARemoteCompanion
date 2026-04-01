@@ -9,7 +9,10 @@
 #include <chrono>
 
 
+extern DWORD g_mainThreadId;
+
 HHOOK KeyboardHook::g_keyboardHook = nullptr;
+static std::function<void()> g_reconnectAllCallback;
 
 bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
     if (KeyboardState::CheckExitShortcut(vkCode)) {
@@ -21,6 +24,12 @@ bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
 
     if (KeyboardState::CheckReinstallHookShortcut(vkCode)) {
         Reinstall();
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
+    if (KeyboardState::CheckReconnectShortcut(vkCode)) {
+        if (g_mainThreadId != 0) PostThreadMessage(g_mainThreadId, WM_RECONNECT_ALL, 0, 0);
         KeyboardState::ResetModifiers();
         return true;
     }
@@ -119,6 +128,10 @@ void KeyboardHook::Uninstall() {
     }
 }
 
+void KeyboardHook::SetReconnectAllCallback(std::function<void()> callback) {
+    g_reconnectAllCallback = std::move(callback);
+}
+
 void KeyboardHook::Reinstall() {
     DEBUG_INFO("HOOK", "Reinstalling keyboard hook");
     Uninstall();
@@ -148,6 +161,11 @@ void KeyboardHook::RunMessageLoop() {
             if (msg.message == WM_REINSTALL_HOOK) {
                 DEBUG_INFO("HOOK", "Received WM_REINSTALL_HOOK message");
                 Reinstall();
+                continue;
+            }
+            if (msg.message == WM_RECONNECT_ALL) {
+                DEBUG_INFO("HOOK", "Received WM_RECONNECT_ALL message");
+                if (g_reconnectAllCallback) g_reconnectAllCallback();
                 continue;
             }
             TranslateMessage(&msg);
