@@ -12,6 +12,25 @@
 HHOOK KeyboardHook::g_keyboardHook = nullptr;
 
 bool KeyboardHook::HandleToggleShortcut(DWORD vkCode) {
+    if (KeyboardState::CheckExitShortcut(vkCode)) {
+        g_shutdown = true;
+        PostQuitMessage(0);
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
+    if (KeyboardState::CheckReinstallHookShortcut(vkCode)) {
+        Reinstall();
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
+    if (KeyboardState::CheckLocalShortcut(vkCode)) {
+        AppState::GoLocal();
+        KeyboardState::ResetModifiers();
+        return true;
+    }
+
     if (KeyboardState::CheckCycleShortcut(vkCode)) {
         AppState::CycleProfile();
         KeyboardState::ResetModifiers();
@@ -100,6 +119,16 @@ void KeyboardHook::Uninstall() {
     }
 }
 
+void KeyboardHook::Reinstall() {
+    DEBUG_INFO("HOOK", "Reinstalling keyboard hook");
+    Uninstall();
+    if (Install()) {
+        DEBUG_INFO("HOOK", "Keyboard hook reinstalled successfully");
+    } else {
+        DEBUG_ERROR("HOOK", "Failed to reinstall keyboard hook");
+    }
+}
+
 void KeyboardHook::RunMessageLoop() {
     MSG msg;
     DEBUG_INFO("HOOK", "Starting message loop");
@@ -115,6 +144,11 @@ void KeyboardHook::RunMessageLoop() {
             if (msg.message == WM_CONNECTION_LOST) {
                 DEBUG_INFO("HOOK", "Received WM_CONNECTION_LOST message, breaking loop");
                 break;
+            }
+            if (msg.message == WM_REINSTALL_HOOK) {
+                DEBUG_INFO("HOOK", "Received WM_REINSTALL_HOOK message");
+                Reinstall();
+                continue;
             }
             TranslateMessage(&msg);
             DispatchMessage(&msg);

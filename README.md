@@ -13,7 +13,7 @@ A cross-platform C++ client for connecting to NVDA Remote servers, enabling remo
 - **Background mode** (Windows): Run without a console window, with a system tray icon
 
 ### Input and Output
-- **Keyboard input forwarding**: Captures and forwards keyboard events to remote sessions (Windows only)
+- **Keyboard input forwarding**: Captures and forwards keyboard events to remote sessions
 - **Cycle shortcut** (default: Ctrl+Alt+F11): Cycles through connected profiles and local machine, announcing the active target via speech
 - **Optional per-profile shortcuts**: Direct toggle shortcuts for specific profiles
 - **Speech synthesis**: Text-to-speech output using SRAL (Screen Reader Abstraction Library)
@@ -104,8 +104,7 @@ Where `{arch}` is `x64`.
    - Connection key (channel identifier)
 
 3. **Control the session**:
-   - **Windows**: Press the cycle shortcut (default: Ctrl+Alt+F11) to cycle between connected profiles and local machine
-   - **Linux**: Currently operates in receive-only mode
+   - Press the cycle shortcut (default: Ctrl+Alt+F11) to cycle between connected profiles and local machine
    - Speech from the remote session will be played locally
    - The active profile name is announced via speech when cycling
    - Use interactive commands to manage connections (type `help` at the `>` prompt)
@@ -193,6 +192,9 @@ Generate a default config file with:
 | `debug_level` | string | `"warning"` | Logging level: `"warning"`, `"info"`, `"verbose"`, `"trace"` |
 | `background` | bool | `false` | Run in background mode with system tray (Windows only) |
 | `cycle_shortcut` | string | `"ctrl+alt+f11"` | Shortcut to cycle between profiles and local machine |
+| `local_shortcut` | string | none | Shortcut to immediately return to local machine control from any remote session (unset by default) |
+| `exit_shortcut` | string | none | Shortcut to gracefully exit the application (unset by default) |
+| `reinstall_hook_shortcut` | string | none | Shortcut to reinstall the keyboard hook (Windows only, unset by default) |
 | `profiles` | array | `[]` | Connection profiles (see below) |
 
 #### Profile Fields
@@ -232,6 +234,22 @@ You can optionally assign a dedicated shortcut to individual profiles via the `s
 
 Both methods work together. Use the cycle shortcut for sequential switching and per-profile shortcuts for quick access to frequently used connections.
 
+#### Other Global Shortcuts (Windows only, unset by default)
+
+| Shortcut config key | Description |
+|---------------------|-------------|
+| `local_shortcut` | Immediately return to local machine control from any remote session |
+| `exit_shortcut` | Gracefully exit the application |
+| `reinstall_hook_shortcut` | Reinstall the keyboard hook — useful after restarting NVDA, which may push its hook in front of ours and intercept the NVDA modifier key before it reaches this app |
+
+Example:
+```json
+{
+    "exit_shortcut": "ctrl+win+f10",
+    "reinstall_hook_shortcut": "ctrl+win+f9"
+}
+```
+
 ### Interactive Commands
 
 While the application is running, you can manage profiles and connections from the `>` prompt:
@@ -245,6 +263,7 @@ While the application is running, you can manage profiles and connections from t
 | `add <name> <host> <key> [port] [shortcut] [auto_connect]` | | Add a new profile |
 | `edit <name\|index> <field> <value>` | | Edit a profile field (fields: `name`, `host`, `port`, `key`, `shortcut`, `auto_connect`, `speech`, `mute_on_local_control`) |
 | `delete <name\|index>` | `rm` | Delete a profile |
+| `reinstall-hook` | `hook` | Reinstall keyboard hook (fixes NVDA modifier after NVDA restart, Windows only) |
 | `help` | `?` | Show available commands |
 | `quit` | `exit` | Exit the application |
 
@@ -296,7 +315,6 @@ Background mode requires connection parameters (via CLI or config file) since th
 ### Current Limitations
 
 #### Linux Platform
-- **No keyboard input forwarding**: Linux implementation currently supports receive-only mode
 - **No background mode**: Background mode with system tray is Windows only
 
 ## Contributing
@@ -311,7 +329,6 @@ We welcome contributions to improve NVDA Remote Companion:
 5. **Logging**: Add appropriate debug logging for troubleshooting
 
 ### Areas for Contribution
-- **Linux keyboard input forwarding**: Implementation of system-wide input capture
 - **Additional speech engines**: Integration with more TTS systems
 - **Protocol enhancements**: Support for additional NVDA Remote features
 - **Performance optimization**: Memory usage and connection reliability improvements

@@ -1,6 +1,7 @@
 #pragma once
 #include "ConnectionManager.h"
 #include "ConfigFile.h"
+#include "Config.h"
 #include <vector>
 #include <memory>
 #include <string>
@@ -20,17 +21,20 @@ public:
     CommandHandler(std::string configPath, ConfigFileData configData);
 
     int ConnectAutoProfiles();
-
+    bool ConnectInteractive();
     void RunCommandLoop();
 
-    std::vector<ProfileSession>& GetSessions() { return m_sessions; }
     const std::vector<ProfileSession>& GetSessions() const { return m_sessions; }
+    int GetSessionCount() const { return Config::isize(m_sessions); }
 
     void ReconnectAll();
-
+    void ToggleProfile(int index);
     void UpdateNetworkClients();
+    void SetDisconnectCallback(std::function<void()> callback);
 
-    void SetDisconnectCallbackFactory(std::function<void(ConnectionManager&)> factory);
+    int CountConnectedSessions() const;
+    bool HasAnyConnected() const;
+    bool HasDisconnectedSessions() const;
 
 private:
     void HandleCommand(const std::string& line);
@@ -43,8 +47,12 @@ private:
     void CmdEdit(const std::string& args);
     void CmdDelete(const std::string& args);
     void CmdHelp();
+    void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);
+    bool PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue = "");
+    bool IsValidSessionIndex(int index) const { return index >= 0 && index < Config::isize(m_sessions); }
+
     void SaveConfig();
     void ConnectSession(int index);
     void DisconnectSession(int index);
@@ -53,5 +61,5 @@ private:
     std::string m_configPath;
     ConfigFileData m_configData;
     std::vector<ProfileSession> m_sessions;
-    std::function<void(ConnectionManager&)> m_disconnectCallbackFactory;
+    std::function<void()> m_disconnectCallback;
 };

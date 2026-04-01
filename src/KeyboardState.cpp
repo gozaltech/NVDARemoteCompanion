@@ -1,21 +1,15 @@
 #include "KeyboardState.h"
+#include "Config.h"
 #include "Debug.h"
 #include <algorithm>
 #include <sstream>
 #include <map>
 
-#ifdef _WIN32
-    #define CTRL_KEY_1 VK_CONTROL
-    #define CTRL_KEY_2 VK_LCONTROL
-    #define CTRL_KEY_3 VK_RCONTROL
-    #define WIN_KEY_1  VK_LWIN
-    #define WIN_KEY_2  VK_RWIN
-#else
-    #define CTRL_KEY_1 0x25
-    #define CTRL_KEY_2 0x69
-    #define WIN_KEY_1  0x85
-    #define WIN_KEY_2  0x86
-#endif
+#define CTRL_KEY_1 VK_CONTROL
+#define CTRL_KEY_2 VK_LCONTROL
+#define CTRL_KEY_3 VK_RCONTROL
+#define WIN_KEY_1  VK_LWIN
+#define WIN_KEY_2  VK_RWIN
 
 bool KeyboardState::g_ctrlPressed = false;
 bool KeyboardState::g_winPressed = false;
@@ -24,15 +18,14 @@ bool KeyboardState::g_shiftPressed = false;
 
 std::vector<ShortcutConfig> KeyboardState::g_shortcuts;
 ShortcutConfig KeyboardState::g_cycleShortcut;
+ShortcutConfig KeyboardState::g_exitShortcut;
+ShortcutConfig KeyboardState::g_reinstallHookShortcut;
+ShortcutConfig KeyboardState::g_localShortcut;
 std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
 bool KeyboardState::IsControlKey(NativeKeyType vkCode) {
-#ifdef _WIN32
     return vkCode == CTRL_KEY_1 || vkCode == CTRL_KEY_2 || vkCode == CTRL_KEY_3;
-#else
-    return vkCode == CTRL_KEY_1 || vkCode == CTRL_KEY_2;
-#endif
 }
 
 bool KeyboardState::IsWinKey(NativeKeyType vkCode) {
@@ -61,16 +54,79 @@ static bool MatchesShortcut(const ShortcutConfig& sc, NativeKeyType vkCode,
     return (ctrl == sc.ctrl) && (win == sc.win) && (alt == sc.alt) && (shift == sc.shift);
 }
 
+void KeyboardState::ApplyGlobalShortcut(ShortcutConfig& sc, const std::string& shortcut, const char* name) {
+    sc = ParseShortcutString(shortcut);
+    if (sc.key != 0) {
+        DEBUG_INFO_F("KEYS", "{} shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                     name, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
+    }
+}
+
+bool KeyboardState::CheckGlobalShortcut(const ShortcutConfig& sc, NativeKeyType vkCode) {
+    return MatchesShortcut(sc, vkCode, g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
+}
+
 int KeyboardState::CheckToggleShortcut(NativeKeyType vkCode) {
-#ifdef _WIN32
     for (int i = 0; i < static_cast<int>(g_shortcuts.size()); i++) {
         if (MatchesShortcut(g_shortcuts[i], vkCode,
                             g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed)) {
             return i;
         }
     }
-#endif
     return -1;
+}
+
+void KeyboardState::ClearShortcuts() {
+    g_shortcuts.clear();
+    DEBUG_VERBOSE("KEYS", "All shortcuts cleared");
+}
+
+void KeyboardState::SetToggleShortcut(const std::string& shortcut) {
+    SetToggleShortcutAt(0, shortcut);
+}
+
+void KeyboardState::SetToggleShortcutAt(int index, const std::string& shortcut) {
+    auto sc = ParseShortcutString(shortcut);
+    if (sc.key == 0) return;
+
+    while (static_cast<int>(g_shortcuts.size()) <= index) {
+        g_shortcuts.push_back({});
+    }
+    g_shortcuts[index] = sc;
+    DEBUG_INFO_F("KEYS", "Shortcut[{}] set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
+                 index, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
+}
+
+void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_cycleShortcut, shortcut, "Cycle");
+}
+
+bool KeyboardState::CheckCycleShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_cycleShortcut, vkCode);
+}
+
+void KeyboardState::SetExitShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_exitShortcut, shortcut, "Exit");
+}
+
+bool KeyboardState::CheckExitShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_exitShortcut, vkCode);
+}
+
+void KeyboardState::SetReinstallHookShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_reinstallHookShortcut, shortcut, "Reinstall hook");
+}
+
+bool KeyboardState::CheckReinstallHookShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_reinstallHookShortcut, vkCode);
+}
+
+void KeyboardState::SetLocalShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_localShortcut, shortcut, "Local");
+}
+
+bool KeyboardState::CheckLocalShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_localShortcut, vkCode);
 }
 
 static NativeKeyType ParseKey(const std::string& keyName) {
@@ -116,8 +172,7 @@ ShortcutConfig KeyboardState::ParseShortcutString(const std::string& shortcut) {
     std::string segment;
 
     while (std::getline(ss, segment, '+')) {
-        segment.erase(0, segment.find_first_not_of(" \t"));
-        segment.erase(segment.find_last_not_of(" \t") + 1);
+        segment = Config::TrimWhitespace(segment);
         std::string lower = segment;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
@@ -132,41 +187,6 @@ ShortcutConfig KeyboardState::ParseShortcutString(const std::string& shortcut) {
         }
     }
     return sc;
-}
-
-bool KeyboardState::CheckCycleShortcut(NativeKeyType vkCode) {
-    return MatchesShortcut(g_cycleShortcut, vkCode,
-                           g_ctrlPressed, g_winPressed, g_altPressed, g_shiftPressed);
-}
-
-void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
-    g_cycleShortcut = ParseShortcutString(shortcut);
-    if (g_cycleShortcut.key != 0) {
-        DEBUG_INFO_F("KEYS", "Cycle shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
-                     g_cycleShortcut.ctrl, g_cycleShortcut.win, g_cycleShortcut.alt,
-                     g_cycleShortcut.shift, g_cycleShortcut.key);
-    }
-}
-
-void KeyboardState::ClearShortcuts() {
-    g_shortcuts.clear();
-    DEBUG_VERBOSE("KEYS", "All shortcuts cleared");
-}
-
-void KeyboardState::SetToggleShortcut(const std::string& shortcut) {
-    SetToggleShortcutAt(0, shortcut);
-}
-
-void KeyboardState::SetToggleShortcutAt(int index, const std::string& shortcut) {
-    auto sc = ParseShortcutString(shortcut);
-    if (sc.key == 0) return;
-
-    while (static_cast<int>(g_shortcuts.size()) <= index) {
-        g_shortcuts.push_back({});
-    }
-    g_shortcuts[index] = sc;
-    DEBUG_INFO_F("KEYS", "Shortcut[{}] set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
-                 index, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
 }
 
 void KeyboardState::ResetModifiers() {

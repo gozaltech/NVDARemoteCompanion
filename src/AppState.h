@@ -10,6 +10,7 @@ private:
     static std::vector<std::string> g_profileNames;
 
     static void ReleaseAllKeys();
+    static void AnnounceLocal();
 
 public:
     static bool IsSendingKeys();
@@ -18,4 +19,5 @@ public:
     static void SetConnectedProfiles(const std::vector<int>& indices, const std::vector<std::string>& names);
     static bool IsReleasingKeys();
     static int GetActiveProfile();
+    static void GoLocal();
 };

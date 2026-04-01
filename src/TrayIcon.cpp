@@ -7,7 +7,48 @@
 
 HWND TrayIcon::s_hwnd = nullptr;
 NOTIFYICONDATAA TrayIcon::s_nid = {};
-HMENU TrayIcon::s_menu = nullptr;
+UniqueMenu TrayIcon::s_menu;
+std::function<std::vector<TrayProfile>()> TrayIcon::s_profileProvider;
+std::function<void(int)>                  TrayIcon::s_profileToggleCallback;
+std::function<void()>                     TrayIcon::s_reconnectAllCallback;
+
+void TrayIcon::SetProfileProvider(std::function<std::vector<TrayProfile>()> provider) {
+    s_profileProvider = std::move(provider);
+}
+
+void TrayIcon::SetProfileToggleCallback(std::function<void(int index)> callback) {
+    s_profileToggleCallback = std::move(callback);
+}
+
+void TrayIcon::SetReconnectAllCallback(std::function<void()> callback) {
+    s_reconnectAllCallback = std::move(callback);
+}
+
+void TrayIcon::RebuildMenu() {
+    while (GetMenuItemCount(s_menu.get()) > 0) {
+        RemoveMenu(s_menu.get(), 0, MF_BYPOSITION);
+    }
+
+    if (s_profileProvider) {
+        auto profiles = s_profileProvider();
+
+        AppendMenuA(s_menu.get(), MF_STRING, ID_TRAY_RECONNECT_ALL, "Reconnect all");
+
+        HMENU sub = CreatePopupMenu();
+        for (int i = 0; i < Config::isize(profiles); i++) {
+            std::string label = (profiles[i].connected ? "Disconnect: " : "Connect: ") + profiles[i].name;
+            UINT flags = MF_STRING | (profiles[i].connected ? MF_CHECKED : MF_UNCHECKED);
+            AppendMenuA(sub, flags, ID_TRAY_PROFILE_BASE + i, label.c_str());
+        }
+        AppendMenuA(s_menu.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(sub), "Profiles");
+
+        AppendMenuA(s_menu.get(), MF_SEPARATOR, 0, nullptr);
+    }
+
+    AppendMenuA(s_menu.get(), MF_STRING, ID_TRAY_REINSTALL_HOOK, "Reinstall keyboard hook");
+    AppendMenuA(s_menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuA(s_menu.get(), MF_STRING, ID_TRAY_EXIT, "Exit");
+}
 
 LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -16,18 +57,31 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             POINT pt;
             GetCursorPos(&pt);
             SetForegroundWindow(hwnd);
-            TrackPopupMenu(s_menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, nullptr);
+            RebuildMenu();
+            TrackPopupMenu(s_menu.get(), TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, nullptr);
             PostMessage(hwnd, WM_NULL, 0, 0);
         }
         return 0;
 
-    case WM_COMMAND:
-        if (LOWORD(wParam) == ID_TRAY_EXIT) {
+    case WM_COMMAND: {
+        UINT id = LOWORD(wParam);
+        if (id == ID_TRAY_EXIT) {
             DEBUG_INFO("TRAY", "Exit requested from tray menu");
             g_shutdown = true;
             PostQuitMessage(0);
+        } else if (id == ID_TRAY_REINSTALL_HOOK) {
+            DEBUG_INFO("TRAY", "Reinstall keyboard hook requested from tray menu");
+            KeyboardHook::Reinstall();
+        } else if (id == ID_TRAY_RECONNECT_ALL) {
+            DEBUG_INFO("TRAY", "Reconnect all requested from tray menu");
+            if (s_reconnectAllCallback) s_reconnectAllCallback();
+        } else if (id >= ID_TRAY_PROFILE_BASE) {
+            int profileIdx = static_cast<int>(id - ID_TRAY_PROFILE_BASE);
+            DEBUG_INFO_F("TRAY", "Profile toggle requested for index {}", profileIdx);
+            if (s_profileToggleCallback) s_profileToggleCallback(profileIdx);
         }
         return 0;
+    }
 
     case WM_CONNECTION_LOST:
         return 0;
@@ -59,8 +113,7 @@ bool TrayIcon::Create() {
         return false;
     }
 
-    s_menu = CreatePopupMenu();
-    AppendMenuA(s_menu, MF_STRING, ID_TRAY_EXIT, "Exit");
+    s_menu.reset(CreatePopupMenu());
 
     s_nid.cbSize = sizeof(s_nid);
     s_nid.hWnd = s_hwnd;
@@ -86,10 +139,7 @@ void TrayIcon::Destroy() {
         Shell_NotifyIconA(NIM_DELETE, &s_nid);
         s_nid.hWnd = nullptr;
     }
-    if (s_menu) {
-        DestroyMenu(s_menu);
-        s_menu = nullptr;
-    }
+    s_menu.reset();
     if (s_hwnd) {
         DestroyWindow(s_hwnd);
         s_hwnd = nullptr;
@@ -113,6 +163,11 @@ void TrayIcon::RunMessageLoop() {
         if (msg.message == WM_CONNECTION_LOST) {
             DEBUG_INFO("TRAY", "Connection lost message received");
             break;
+        }
+        if (msg.message == WM_REINSTALL_HOOK) {
+            DEBUG_INFO("TRAY", "Reinstall keyboard hook message received");
+            KeyboardHook::Reinstall();
+            continue;
         }
         TranslateMessage(&msg);
         DispatchMessage(&msg);

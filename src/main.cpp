@@ -3,13 +3,13 @@
 #include <cstdlib>
 #include <csignal>
 #include <atomic>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <functional>
-#include "ConnectionManager.h"
 #include "CommandHandler.h"
 #include "ConfigFile.h"
 #include "Debug.h"
+#include "Audio.h"
 #include "Speech.h"
 #include "Config.h"
 
@@ -22,8 +22,9 @@
     #include <io.h>
     #include <fcntl.h>
 #else
+    #include "LinuxKeyboardGrab.h"
+    #include "KeyboardState.h"
     #include <unistd.h>
-    #include <sys/select.h>
 #endif
 
 std::atomic<bool> g_shutdown(false);
@@ -54,6 +55,7 @@ struct CommandLineArgs {
     Debug::Level debugLevel = Debug::LEVEL_WARNING;
     bool debugEnabled = false;
     bool speechEnabled = true;
+    bool audioEnabled = true;
     bool showHelp = false;
     bool createConfig = false;
     bool backgroundMode = false;
@@ -71,19 +73,20 @@ struct CommandLineArgs {
         return !errors.empty();
     }
 
-    void printErrors() const {
-        for (const auto& error : errors) {
-            std::cerr << "Error: " << error << std::endl;
-        }
-        std::cerr << "Use --help for usage information" << std::endl;
+    std::string errorString() const {
+        std::string out;
+        for (const auto& e : errors) out += "Error: " + e + "\n";
+        out += "Use --help for usage information\n";
+        return out;
     }
 };
 
 namespace ArgHandlers {
     template<typename T>
     auto createStringHandler(T CommandLineArgs::* member, const std::string& errorMsg,
-                           std::function<Config::ValidationResult(const std::string&)> validator = nullptr) {
-        return [member, errorMsg, validator](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
+                           std::function<Config::ValidationResult(const std::string&)> validator = nullptr,
+                           bool marksConnection = false) {
+        return [member, errorMsg, validator, marksConnection](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
             if (i + 1 >= argc) {
                 args.addError(errorMsg);
                 return false;
@@ -97,7 +100,7 @@ namespace ArgHandlers {
                 }
             }
             args.*member = std::move(value);
-            args.hasConnectionParams = true;
+            if (marksConnection) args.hasConnectionParams = true;
             return true;
         };
     }
@@ -147,41 +150,30 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
     CommandLineArgs args;
 
     auto hostHandler = ArgHandlers::createStringHandler(&CommandLineArgs::host,
-        "--host requires a hostname or IP address", Config::Validator::ValidateHost);
+        "--host requires a hostname or IP address", Config::Validator::ValidateHost, true);
     auto portHandler = ArgHandlers::createPortHandler();
     auto keyHandler = ArgHandlers::createStringHandler(&CommandLineArgs::key,
-        "--key requires a connection key", Config::Validator::ValidateKey);
+        "--key requires a connection key", Config::Validator::ValidateKey, true);
     auto shortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::shortcut,
-        "--shortcut requires a key combination (e.g., ctrl+win+f11)");
+        "--shortcut requires a key combination (e.g., ctrl+win+f11)", nullptr, true);
 
     auto debugHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_INFO);
     auto verboseHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_VERBOSE);
     auto traceHandler = ArgHandlers::createDebugHandler(Debug::LEVEL_TRACE);
 
     auto noSpeechHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::speechEnabled, false);
+    auto noAudioHandler  = ArgHandlers::createFlagHandler(&CommandLineArgs::audioEnabled,  false);
     auto helpHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::showHelp, true);
 
-    auto configHandler = [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
-        if (i + 1 >= argc) {
-            args.addError("--config requires a file path");
-            return false;
-        }
-        args.configPath = argv[++i];
-        return true;
-    };
-    auto cycleShortcutHandler = [](CommandLineArgs& args, int& i, int argc, char** argv) -> bool {
-        if (i + 1 >= argc) {
-            args.addError("--cycle-shortcut requires a key combination");
-            return false;
-        }
-        args.cycleShortcut = argv[++i];
-        return true;
-    };
+    auto configHandler = ArgHandlers::createStringHandler(&CommandLineArgs::configPath,
+        "--config requires a file path");
+    auto cycleShortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::cycleShortcut,
+        "--cycle-shortcut requires a key combination");
     auto createConfigHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::createConfig, true);
     auto backgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::backgroundMode, true);
     auto noBackgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::noBackground, true);
 
-    std::map<std::string, std::function<bool(CommandLineArgs&, int&, int, char**)>> argHandlers = {
+    std::unordered_map<std::string, std::function<bool(CommandLineArgs&, int&, int, char**)>> argHandlers = {
         {"-h", hostHandler},
         {"--host", hostHandler},
         {"-p", portHandler},
@@ -204,6 +196,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"-t", traceHandler},
         {"--trace", traceHandler},
         {"--no-speech", noSpeechHandler},
+        {"--no-audio",  noAudioHandler},
         {"--help", helpHandler}
     };
 
@@ -255,6 +248,7 @@ void printHelp(const char* programName) {
     std::cout << "      --create-config   Create a default config file and exit\n\n";
     std::cout << "Other Options:\n";
     std::cout << "      --no-speech       Disable speech synthesis\n";
+    std::cout << "      --no-audio        Disable companion audio feedback (toggle tones, connect/disconnect sounds)\n";
 #ifdef _WIN32
     std::cout << "  -b, --background      Run without console window (system tray only)\n";
 #endif
@@ -280,13 +274,24 @@ void printHelp(const char* programName) {
     std::cout << "  - Host must be a valid hostname or IP address (max " << Config::MAX_HOST_LENGTH << " chars)\n";
     std::cout << "  - Port must be in range " << Config::MIN_PORT << "-" << Config::MAX_PORT << "\n";
     std::cout << "  - Connection key must not exceed " << Config::MAX_KEY_LENGTH << " characters\n";
+    std::cout << "  - Keyboard forwarding requires read access to /dev/input/event* and /dev/uinput\n";
 #ifdef _WIN32
-    std::cout << "  - Windows version includes keyboard forwarding\n";
     std::cout << "  - Each profile can have its own toggle shortcut\n";
-#else
-    std::cout << "  - Linux version runs in receive-only mode (no keyboard forwarding)\n";
 #endif
     std::cout << std::endl;
+}
+
+static std::optional<ProfileConfig> ProfileFromLegacyConfig(const ConfigFileData& cfg) {
+    if (!cfg.profiles.empty()) return std::nullopt;
+    if (!cfg.host || cfg.host->empty() || !cfg.key || cfg.key->empty()) return std::nullopt;
+    ProfileConfig p;
+    p.name = "default";
+    p.host = *cfg.host;
+    p.port = cfg.port.value_or(Config::DEFAULT_PORT);
+    p.key = *cfg.key;
+    if (cfg.shortcut) p.shortcut = *cfg.shortcut;
+    p.autoConnect = true;
+    return p;
 }
 
 void signalHandler(int signal) {
@@ -320,7 +325,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (args.hasErrors()) {
-        args.printErrors();
+        std::cerr << args.errorString();
         return 1;
     }
 
@@ -343,24 +348,23 @@ int main(int argc, char* argv[]) {
             args.backgroundMode = true;
         }
         if (cfg.debugLevel && !args.debugEnabled) {
-            std::string level = *cfg.debugLevel;
-            if (level == "info") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_INFO; }
-            else if (level == "verbose") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_VERBOSE; }
-            else if (level == "trace") { args.debugEnabled = true; args.debugLevel = Debug::LEVEL_TRACE; }
+            static const std::unordered_map<std::string, Debug::Level> debugLevelMap = {
+                {"info",    Debug::LEVEL_INFO},
+                {"verbose", Debug::LEVEL_VERBOSE},
+                {"trace",   Debug::LEVEL_TRACE},
+            };
+            auto it = debugLevelMap.find(*cfg.debugLevel);
+            if (it != debugLevelMap.end()) {
+                args.debugEnabled = true;
+                args.debugLevel = it->second;
+            }
         }
     } else if (!args.configPath.empty()) {
         std::cerr << "Warning: Config file not found: " << args.configPath << std::endl;
     }
 
-    if (cfg.profiles.empty() && cfg.host && !cfg.host->empty() && cfg.key && !cfg.key->empty()) {
-        ProfileConfig p;
-        p.name = "default";
-        p.host = *cfg.host;
-        p.port = cfg.port.value_or(Config::DEFAULT_PORT);
-        p.key = *cfg.key;
-        if (cfg.shortcut) p.shortcut = *cfg.shortcut;
-        p.autoConnect = true;
-        cfg.profiles.push_back(std::move(p));
+    if (auto legacy = ProfileFromLegacyConfig(cfg)) {
+        cfg.profiles.push_back(std::move(*legacy));
     }
 
     if (args.hasConnectionParams) {
@@ -448,6 +452,9 @@ int main(int argc, char* argv[]) {
         DEBUG_INFO_F("MAIN", "Number of profiles: {}", cfg.profiles.size());
     }
 
+    if (cfg.audio.has_value() && !*cfg.audio) args.audioEnabled = false;
+    Audio::SetEnabled(args.audioEnabled);
+
     Speech::SetEnabled(args.speechEnabled);
     if (args.speechEnabled) {
         if (!Speech::Initialize()) {
@@ -462,47 +469,51 @@ int main(int argc, char* argv[]) {
 
     CommandHandler cmdHandler(configPath, cfg);
 
+#ifndef _WIN32
+    {
+        std::string cycleSc = args.cycleShortcut;
+        if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
+        if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
+        KeyboardState::SetCycleShortcut(cycleSc);
+
+        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
+            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
+        if (cfg.localShortcut && !cfg.localShortcut->empty())
+            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
+    }
+
+    cmdHandler.SetDisconnectCallback([]() {
+        DEBUG_INFO("MAIN", "Connection lost callback triggered");
+        LinuxKeyboardGrab::NotifyConnectionLost();
+    });
+#endif
+
 #ifdef _WIN32
     {
         std::string cycleSc = args.cycleShortcut;
         if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
         if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
         KeyboardState::SetCycleShortcut(cycleSc);
+
+        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
+            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
+        if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
+            KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
+        if (cfg.localShortcut && !cfg.localShortcut->empty())
+            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
     }
 
     DWORD mainThreadId = GetCurrentThreadId();
-    cmdHandler.SetDisconnectCallbackFactory([mainThreadId](ConnectionManager& cm) {
-        cm.SetDisconnectCallback([mainThreadId]() {
-            DEBUG_INFO("MAIN", "Connection lost callback triggered");
-            PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
-        });
+    cmdHandler.SetDisconnectCallback([mainThreadId]() {
+        DEBUG_INFO("MAIN", "Connection lost callback triggered");
+        PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
     });
 #endif
 
     if (cfg.profiles.empty()) {
-        auto cm = std::make_unique<ConnectionManager>();
-        cm->SetSpeechEnabled(true);
-#ifdef _WIN32
-        cm->SetDisconnectCallback([mainThreadId]() {
-            PostThreadMessage(mainThreadId, WM_CONNECTION_LOST, 0, 0);
-        });
-#endif
-        if (!cm->EstablishConnection()) {
+        if (!cmdHandler.ConnectInteractive()) {
             return 1;
         }
-#ifdef _WIN32
-        std::string interactiveShortcut = cm->GetShortcut();
-        if (!interactiveShortcut.empty()) {
-            KeyboardState::SetToggleShortcutAt(0, interactiveShortcut);
-        }
-        MessageSender::SetNetworkClient(0, cm->GetClient());
-#endif
-        ProfileSession session;
-        session.config.name = "interactive";
-        session.config.host = "";
-        session.connection = std::move(cm);
-        session.shortcutIndex = 0;
-        cmdHandler.GetSessions().push_back(std::move(session));
     } else {
         int connected = cmdHandler.ConnectAutoProfiles();
         std::cout << connected << " of " << cfg.profiles.size() << " profile(s) connected" << std::endl;
@@ -512,20 +523,37 @@ int main(int argc, char* argv[]) {
 
 #ifdef _WIN32
     bool isTrayMode = (GetConsoleWindow() == nullptr);
+
+    auto updateTrayTooltip = [&cmdHandler]() {
+        std::string tooltip = std::string(Config::APP_NAME) + " - " +
+                              std::to_string(cmdHandler.CountConnectedSessions()) + "/" +
+                              std::to_string(cmdHandler.GetSessionCount()) + " connected";
+        TrayIcon::SetTooltip(tooltip);
+    };
+
     if (isTrayMode) {
         if (!TrayIcon::Create()) {
             DEBUG_ERROR("MAIN", "Failed to create tray icon");
             return 1;
         }
-        auto& sessions = cmdHandler.GetSessions();
-        int connCount = 0;
-        for (const auto& s : sessions) {
-            if (s.connection && s.connection->IsConnected()) connCount++;
-        }
-        std::string tooltip = std::string(Config::APP_NAME) + " - " +
-                              std::to_string(connCount) + "/" +
-                              std::to_string(sessions.size()) + " connected";
-        TrayIcon::SetTooltip(tooltip);
+
+        TrayIcon::SetProfileProvider([&cmdHandler]() {
+            std::vector<TrayProfile> profiles;
+            for (const auto& s : cmdHandler.GetSessions()) {
+                profiles.push_back({s.config.name, s.connection && s.connection->IsConnected()});
+            }
+            return profiles;
+        });
+        TrayIcon::SetProfileToggleCallback([&cmdHandler, &updateTrayTooltip](int index) {
+            cmdHandler.ToggleProfile(index);
+            updateTrayTooltip();
+        });
+        TrayIcon::SetReconnectAllCallback([&cmdHandler, &updateTrayTooltip]() {
+            cmdHandler.ReconnectAll();
+            updateTrayTooltip();
+        });
+
+        updateTrayTooltip();
     }
 
     std::thread cmdThread;
@@ -566,10 +594,7 @@ int main(int argc, char* argv[]) {
 
         cmdHandler.ReconnectAll();
 
-        bool anyConnected = false;
-        for (const auto& s : cmdHandler.GetSessions()) {
-            if (s.connection && s.connection->IsConnected()) { anyConnected = true; break; }
-        }
+        bool anyConnected = cmdHandler.CountConnectedSessions() > 0;
 
         if (!anyConnected && !g_shutdown) {
             DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
@@ -578,14 +603,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (isTrayMode) {
-            int connCount = 0;
-            for (const auto& s : cmdHandler.GetSessions()) {
-                if (s.connection && s.connection->IsConnected()) connCount++;
-            }
-            std::string tooltip = std::string(Config::APP_NAME) + " - " +
-                                  std::to_string(connCount) + "/" +
-                                  std::to_string(cmdHandler.GetSessions().size()) + " connected";
-            TrayIcon::SetTooltip(tooltip);
+            updateTrayTooltip();
         }
     }
 
@@ -597,34 +615,44 @@ int main(int argc, char* argv[]) {
         TrayIcon::Destroy();
     }
 #else
-    DEBUG_INFO("MAIN", "Starting input loop (Linux mode - no keyboard hook)");
+    DEBUG_INFO("MAIN", "Starting Linux keyboard grab loop");
 
     std::thread cmdThread([&cmdHandler]() {
         cmdHandler.RunCommandLoop();
     });
 
     while (!g_shutdown) {
-        bool allConnected = true;
-        for (const auto& s : cmdHandler.GetSessions()) {
-            if (s.connection && !s.connection->IsConnected()) { allConnected = false; break; }
+        cmdHandler.UpdateNetworkClients();
+
+        if (!LinuxKeyboardGrab::Install()) {
+            DEBUG_ERROR("MAIN", "Failed to install Linux keyboard grab");
+            g_shutdown = true;
+            break;
         }
-        if (allConnected) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
-        }
+
+        LinuxKeyboardGrab::RunMessageLoop();
+        DEBUG_INFO("MAIN", "Linux keyboard grab loop ended");
+
+        LinuxKeyboardGrab::Uninstall();
 
         if (g_shutdown) break;
 
-        DEBUG_INFO("MAIN", "Connection lost. Reconnecting in 2 seconds...");
+        DEBUG_INFO("MAIN", "Checking connections...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
+
         cmdHandler.ReconnectAll();
+
+        if (cmdHandler.CountConnectedSessions() == 0 && !g_shutdown) {
+            DEBUG_INFO("MAIN", "No connections active. Retrying in 5 seconds...");
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
     }
 
     if (cmdThread.joinable()) {
         cmdThread.join();
     }
 
-    DEBUG_INFO("MAIN", "Input loop ended, starting cleanup");
+    DEBUG_INFO("MAIN", "Linux keyboard grab loop ended, starting cleanup");
 #endif
 
     DEBUG_VERBOSE("MAIN", "Cleaning up speech system");

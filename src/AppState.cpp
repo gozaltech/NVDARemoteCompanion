@@ -4,6 +4,7 @@
 #include "KeyEvent.h"
 #include "Audio.h"
 #include "Speech.h"
+#include "Config.h"
 
 int AppState::g_activeProfile = -1;
 bool AppState::g_releasingKeys = false;
@@ -25,12 +26,16 @@ void AppState::ReleaseAllKeys() {
     g_releasingKeys = false;
 }
 
+void AppState::AnnounceLocal() {
+    g_activeProfile = -1;
+    Audio::PlayTone(440, 100);
+    Speech::Speak("Local", true);
+}
+
 void AppState::ToggleSendingKeys(int profileIndex) {
     if (g_activeProfile == profileIndex) {
         ReleaseAllKeys();
-        g_activeProfile = -1;
-        Audio::PlayTone(440, 100);
-        Speech::Speak("Local", true);
+        AnnounceLocal();
     } else {
         if (g_activeProfile >= 0) {
             ReleaseAllKeys();
@@ -38,8 +43,8 @@ void AppState::ToggleSendingKeys(int profileIndex) {
         g_activeProfile = profileIndex;
         MessageSender::SetActiveProfile(profileIndex);
         Audio::PlayTone(880, 100);
-        for (size_t i = 0; i < g_connectedProfiles.size(); i++) {
-            if (g_connectedProfiles[i] == profileIndex && i < g_profileNames.size()) {
+        for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
+            if (g_connectedProfiles[i] == profileIndex && i < Config::isize(g_profileNames)) {
                 Speech::Speak(g_profileNames[i], true);
                 break;
             }
@@ -54,7 +59,7 @@ void AppState::CycleProfile() {
 
     int currentIdx = -1;
     if (g_activeProfile >= 0) {
-        for (int i = 0; i < static_cast<int>(g_connectedProfiles.size()); i++) {
+        for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
             if (g_connectedProfiles[i] == g_activeProfile) {
                 currentIdx = i;
                 break;
@@ -67,15 +72,13 @@ void AppState::CycleProfile() {
     }
 
     int nextIdx = currentIdx + 1;
-    if (nextIdx >= static_cast<int>(g_connectedProfiles.size())) {
-        g_activeProfile = -1;
-        Audio::PlayTone(440, 100);
-        Speech::Speak("Local", true);
+    if (nextIdx >= Config::isize(g_connectedProfiles)) {
+        AnnounceLocal();
     } else {
         g_activeProfile = g_connectedProfiles[nextIdx];
         MessageSender::SetActiveProfile(g_activeProfile);
         Audio::PlayTone(880, 100);
-        if (nextIdx < static_cast<int>(g_profileNames.size())) {
+        if (nextIdx < Config::isize(g_profileNames)) {
             Speech::Speak(g_profileNames[nextIdx], true);
         }
     }
@@ -92,4 +95,11 @@ bool AppState::IsReleasingKeys() {
 
 int AppState::GetActiveProfile() {
     return g_activeProfile;
+}
+
+void AppState::GoLocal() {
+    if (g_activeProfile >= 0) {
+        ReleaseAllKeys();
+        AnnounceLocal();
+    }
 }

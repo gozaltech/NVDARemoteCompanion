@@ -3,6 +3,18 @@
 #include <optional>
 #include <vector>
 
+namespace ProfileFields {
+    constexpr const char* NAME                  = "name";
+    constexpr const char* HOST                  = "host";
+    constexpr const char* PORT                  = "port";
+    constexpr const char* KEY                   = "key";
+    constexpr const char* SHORTCUT              = "shortcut";
+    constexpr const char* AUTO_CONNECT          = "auto_connect";
+    constexpr const char* SPEECH                = "speech";
+    constexpr const char* MUTE_ON_LOCAL_CONTROL = "mute_on_local_control";
+    constexpr const char* FORWARD_AUDIO         = "forward_audio";
+}
+
 struct ProfileConfig {
     std::string name;
     std::string host;
@@ -12,12 +24,17 @@ struct ProfileConfig {
     bool autoConnect = true;
     bool speech = true;
     bool muteOnLocalControl = false;
+    bool forwardAudio = true;
 };
 
 struct ConfigFileData {
     std::optional<std::string> debugLevel;
     std::optional<bool> background;
+    std::optional<bool> audio;
     std::optional<std::string> cycleShortcut;
+    std::optional<std::string> exitShortcut;
+    std::optional<std::string> reinstallHookShortcut;
+    std::optional<std::string> localShortcut;
 
     std::vector<ProfileConfig> profiles;
 
@@ -28,6 +45,7 @@ struct ConfigFileData {
 };
 
 namespace ConfigFile {
+    std::string DefaultPath();
     std::string FindConfigFile(const std::string& explicitPath = "");
     ConfigFileData Load(const std::string& path);
     bool CreateDefault(const std::string& path);
