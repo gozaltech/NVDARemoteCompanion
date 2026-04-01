@@ -215,6 +215,12 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     }
     j["profiles"] = std::move(profilesArr);
 
+    fs::path filePath(path);
+    if (filePath.has_parent_path()) {
+        std::error_code ec;
+        fs::create_directories(filePath.parent_path(), ec);
+    }
+
     std::ofstream file(path);
     if (!file.is_open()) return false;
 
