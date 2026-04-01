@@ -256,20 +256,11 @@ void CommandHandler::ToggleProfile(int index) {
 }
 
 void CommandHandler::ReconnectAll() {
-    bool changed = false;
     for (int i = 0; i < Config::isize(m_sessions); i++) {
-        auto& session = m_sessions[i];
-        if (session.connection && !session.connection->IsConnected()) {
-            DEBUG_INFO_F("MAIN", "Reconnecting profile '{}'...", session.config.name);
-            if (session.connection->Reconnect()) {
-                DEBUG_INFO_F("MAIN", "Profile '{}' reconnected", session.config.name);
-                changed = true;
-            }
-        }
+        DisconnectSession(i);
+        ConnectSession(i);
     }
-    if (changed) {
-        RebuildShortcuts();
-    }
+    RebuildShortcuts();
 }
 
 void CommandHandler::RunCommandLoop() {
