@@ -14,8 +14,18 @@
 
 namespace fs = std::filesystem;
 
+#ifdef __ANDROID__
+static std::string g_androidDataDir;
+
+void ConfigFile::SetAndroidDataDir(const std::string& dir) {
+    g_androidDataDir = dir;
+}
+#endif
+
 static std::string GetPlatformConfigDir() {
-#ifdef _WIN32
+#ifdef __ANDROID__
+    return g_androidDataDir;
+#elif defined(_WIN32)
     char path[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, path))) {
         return (fs::path(path) / "NVDARemoteCompanion").string();
@@ -217,19 +227,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"shortcuts", nlohmann::ordered_json({
             {"cycle", "ctrl+alt+f11"}
         })},
-        {"profiles", nlohmann::ordered_json::array({
-            nlohmann::ordered_json({
-                {"name", "default"},
-                {"host", ""},
-                {"port", Config::DEFAULT_PORT},
-                {"key", ""},
-                {"shortcut", "ctrl+win+f11"},
-                {"auto_connect", true},
-                {"speech", true},
-                {"mute_on_local_control", false},
-                {"forward_nvda_sounds", true}
-            })
-        })}
+        {"profiles", nlohmann::ordered_json::array()}
     };
 
     std::ofstream file(path);

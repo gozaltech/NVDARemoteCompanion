@@ -1,0 +1,119 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+def defaultVersionName = '1.0.0'
+
+def resolveVersionName() {
+    def envVersion = System.getenv('APP_VERSION_NAME')
+    if (envVersion) return envVersion.startsWith('v') ? envVersion.substring(1) : envVersion
+    try {
+        def proc = 'git describe --tags --abbrev=0'.execute([], rootDir)
+        proc.waitFor()
+        if (proc.exitValue() != 0) return defaultVersionName
+        def tag = proc.text.trim()
+        if (tag.isEmpty()) return defaultVersionName
+        return tag.startsWith('v') ? tag.substring(1) : tag
+    } catch (Exception ignored) {
+        return defaultVersionName
+    }
+}
+
+def resolveVersionCode(String versionName) {
+    try {
+        def parts = versionName.tokenize('.')
+        def major = parts.size() > 0 ? parts[0].toInteger() : 0
+        def minor = parts.size() > 1 ? parts[1].toInteger() : 0
+        def patch = parts.size() > 2 ? parts[2].toInteger() : 0
+        return major * 10000 + minor * 100 + patch
+    } catch (Exception ignored) {
+        return 1
+    }
+}
+
+def appVersionName = resolveVersionName()
+def appVersionCode = resolveVersionCode(appVersionName)
+
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) localPropsFile.withInputStream { localProps.load(it) }
+
+def signing = { key ->
+    System.getenv(key) ?: localProps.getProperty(key.toLowerCase().replace('_', '.'))
+}
+
+android {
+    namespace 'org.gozaltech.nvdaremotecompanion.android'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'org.gozaltech.nvdaremotecompanion.android'
+        minSdk 26
+        targetSdk 36
+        versionCode appVersionCode
+        versionName appVersionName
+
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++20'
+                arguments '-DANDROID_STL=c++_shared', '-DANDROID_PLATFORM=android-26'
+            }
+        }
+    }
+
+    signingConfigs {
+        release {
+            def keystoreFile = signing('KEYSTORE_FILE')
+            if (keystoreFile) {
+                storeFile     file(keystoreFile)
+                storePassword signing('KEYSTORE_PASSWORD')
+                keyAlias      signing('KEY_ALIAS')
+                keyPassword   signing('KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            def keystoreFile = signing('KEYSTORE_FILE')
+            if (keystoreFile) signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "NVDARemoteCompanion-v${variant.versionName}.apk"
+        }
+    }
+
+    bundle {
+        language { enableSplit = true }
+        density  { enableSplit = true }
+        abi      { enableSplit = true }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+}
+
+dependencies {
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.activity
+    implementation libs.androidx.lifecycle.viewmodel
+    implementation libs.androidx.lifecycle.livedata
+}

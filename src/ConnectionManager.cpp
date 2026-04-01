@@ -22,6 +22,13 @@ ConnectionManager::ConnectionManager() : m_protocolHandshakeComplete(false) {
 
 ConnectionManager::~ConnectionManager() {
     DEBUG_INFO("CONN", "ConnectionManager destructor called");
+    m_wantsConnection = false;
+    {
+        std::lock_guard<std::mutex> lock(m_reconnectMutex);
+        m_reconnectCv.notify_all();
+    }
+    if (m_reconnectThread.joinable()) m_reconnectThread.join();
+
     if (m_client) {
         if (m_client->IsConnected()) {
             Audio::PlayWave("disconnected");
@@ -134,19 +141,27 @@ bool ConnectionManager::EstablishConnection(std::string_view host, int port, std
     auto sanitizedHost = Config::TrimWhitespace(std::string(host));
     auto sanitizedKey = Config::TrimWhitespace(std::string(key));
     auto sanitizedShortcut = Config::TrimWhitespace(std::string(shortcut));
-    
+
     auto validation = Config::Validator::ValidateConnectionParams(sanitizedHost, port, sanitizedKey);
     if (!validation) {
         DEBUG_ERROR_F("CONN", "Connection parameter validation failed: {}", validation.errorMessage);
         return false;
     }
-    
+
     DEBUG_INFO_F("CONN", "Using validated connection parameters: {}:{}", sanitizedHost, port);
     m_params.host = std::move(sanitizedHost);
     m_params.port = port;
     m_params.key = std::move(sanitizedKey);
     m_params.shortcut = std::move(sanitizedShortcut);
-    
+
+    m_wantsConnection = true;
+#ifndef ANDROID
+    // On Android, reconnects are managed by ConnectivityManager.NetworkCallback
+    if (!m_reconnectThread.joinable()) {
+        m_reconnectThread = std::thread(&ConnectionManager::ReconnectLoop, this);
+    }
+#endif
+
     return EstablishConnectionInternal();
 }
 
@@ -155,15 +170,19 @@ bool ConnectionManager::Reconnect() {
         DEBUG_ERROR("CONN", "Cannot reconnect - no connection parameters available");
         return false;
     }
-    auto savedCallback = m_disconnectCallback;
-    SetDisconnectCallback(nullptr);
-    Disconnect();
-    SetDisconnectCallback(savedCallback);
+    // Disconnect without clearing m_wantsConnection so auto-reconnect stays armed
+    if (m_client) m_client->Disconnect();
+    m_protocolHandshakeComplete = false;
     return EstablishConnectionInternal();
 }
 
 void ConnectionManager::Disconnect() {
     DEBUG_INFO("CONN", "Disconnecting...");
+    m_wantsConnection = false;
+    {
+        std::lock_guard<std::mutex> lock(m_reconnectMutex);
+        m_reconnectCv.notify_all();
+    }
     if (m_client) {
         m_client->Disconnect();
     }
@@ -214,6 +233,51 @@ bool ConnectionManager::IsConnected() const {
 void ConnectionManager::SetDisconnectCallback(std::function<void()> callback) {
     m_disconnectCallback = callback;
     if (m_client) {
-        m_client->SetDisconnectCallback(callback);
+        m_client->SetDisconnectCallback([this]() {
+            m_protocolHandshakeComplete = false;
+            if (m_disconnectCallback) m_disconnectCallback();
+            TriggerReconnect();
+        });
     }
+}
+
+void ConnectionManager::TriggerReconnect() {
+    if (!m_wantsConnection) return;
+    std::lock_guard<std::mutex> lock(m_reconnectMutex);
+    m_reconnectPending = true;
+    m_reconnectCv.notify_one();
+}
+
+void ConnectionManager::ReconnectLoop() {
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lock(m_reconnectMutex);
+            m_reconnectCv.wait(lock, [this] {
+                return m_reconnectPending || !m_wantsConnection;
+            });
+            if (!m_wantsConnection) break;
+            m_reconnectPending = false;
+        }
+
+        // Retry until reconnected or explicit disconnect
+        while (m_wantsConnection) {
+            DEBUG_INFO_F("CONN", "Auto-reconnect: waiting 5s before retrying profile {}", m_profileIndex);
+            {
+                std::unique_lock<std::mutex> lock(m_reconnectMutex);
+                m_reconnectCv.wait_for(lock, std::chrono::seconds(5),
+                    [this] { return !m_wantsConnection; });
+            }
+            if (!m_wantsConnection) break;
+
+            DEBUG_INFO_F("CONN", "Auto-reconnect: attempting to reconnect profile {}", m_profileIndex);
+            bool ok = EstablishConnectionInternal();
+            if (ok) {
+                DEBUG_INFO_F("CONN", "Auto-reconnect: profile {} reconnected", m_profileIndex);
+                if (m_reconnectCallback) m_reconnectCallback();
+                break;
+            }
+            DEBUG_INFO_F("CONN", "Auto-reconnect: profile {} failed, will retry", m_profileIndex);
+        }
+    }
+    DEBUG_INFO("CONN", "ReconnectLoop exiting");
 }

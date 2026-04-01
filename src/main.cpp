@@ -499,6 +499,16 @@ int main(int argc, char* argv[]) {
         keyboard->NotifyConnectionLost();
     });
 
+    cmdHandler.SetReconnectCallback([&cmdHandler]() {
+        DEBUG_INFO("MAIN", "Auto-reconnect succeeded");
+#ifdef _WIN32
+        std::string tooltip = std::string(Config::APP_NAME) + " - " +
+                              std::to_string(cmdHandler.CountConnectedSessions()) + "/" +
+                              std::to_string(cmdHandler.GetSessionCount()) + " connected";
+        TrayIcon::SetTooltip(tooltip);
+#endif
+    });
+
     keyboard->SetReconnectCallback([&cmdHandler]() {
         DEBUG_INFO("MAIN", "Reconnect all shortcut triggered");
         cmdHandler.ReconnectAll();

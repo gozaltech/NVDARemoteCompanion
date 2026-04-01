@@ -52,4 +52,8 @@ namespace ConfigFile {
     ConfigFileData Load(const std::string& path);
     bool CreateDefault(const std::string& path);
     bool Save(const std::string& path, const ConfigFileData& data);
+
+#ifdef __ANDROID__
+    void SetAndroidDataDir(const std::string& dir);
+#endif
 }
