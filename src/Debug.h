@@ -70,14 +70,16 @@ private:
     }
 };
 
-#define DEBUG_ERROR(category, message) Debug::Log(Debug::LEVEL_ERROR, category, message)
-#define DEBUG_WARN(category, message) Debug::Log(Debug::LEVEL_WARNING, category, message)
-#define DEBUG_INFO(category, message) Debug::Log(Debug::LEVEL_INFO, category, message)
-#define DEBUG_VERBOSE(category, message) Debug::Log(Debug::LEVEL_VERBOSE, category, message)
-#define DEBUG_TRACE(category, message) Debug::Log(Debug::LEVEL_TRACE, category, message)
+#define DEBUG_ENABLED_FOR(level) (Debug::IsEnabled() && Debug::GetLevel() >= (level))
 
-#define DEBUG_ERROR_F(category, format, ...) Debug::LogF(Debug::LEVEL_ERROR, category, format, __VA_ARGS__)
-#define DEBUG_WARN_F(category, format, ...) Debug::LogF(Debug::LEVEL_WARNING, category, format, __VA_ARGS__)
-#define DEBUG_INFO_F(category, format, ...) Debug::LogF(Debug::LEVEL_INFO, category, format, __VA_ARGS__)
-#define DEBUG_VERBOSE_F(category, format, ...) Debug::LogF(Debug::LEVEL_VERBOSE, category, format, __VA_ARGS__)
-#define DEBUG_TRACE_F(category, format, ...) Debug::LogF(Debug::LEVEL_TRACE, category, format, __VA_ARGS__)
+#define DEBUG_ERROR(category, message)   do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_ERROR))   Debug::Log(Debug::LEVEL_ERROR,   category, message); } while(0)
+#define DEBUG_WARN(category, message)    do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_WARNING)) Debug::Log(Debug::LEVEL_WARNING, category, message); } while(0)
+#define DEBUG_INFO(category, message)    do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_INFO))    Debug::Log(Debug::LEVEL_INFO,    category, message); } while(0)
+#define DEBUG_VERBOSE(category, message) do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_VERBOSE)) Debug::Log(Debug::LEVEL_VERBOSE, category, message); } while(0)
+#define DEBUG_TRACE(category, message)   do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_TRACE))   Debug::Log(Debug::LEVEL_TRACE,   category, message); } while(0)
+
+#define DEBUG_ERROR_F(category, format, ...)   do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_ERROR))   Debug::LogF(Debug::LEVEL_ERROR,   category, format, __VA_ARGS__); } while(0)
+#define DEBUG_WARN_F(category, format, ...)    do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_WARNING)) Debug::LogF(Debug::LEVEL_WARNING, category, format, __VA_ARGS__); } while(0)
+#define DEBUG_INFO_F(category, format, ...)    do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_INFO))    Debug::LogF(Debug::LEVEL_INFO,    category, format, __VA_ARGS__); } while(0)
+#define DEBUG_VERBOSE_F(category, format, ...) do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_VERBOSE)) Debug::LogF(Debug::LEVEL_VERBOSE, category, format, __VA_ARGS__); } while(0)
+#define DEBUG_TRACE_F(category, format, ...)   do { if (DEBUG_ENABLED_FOR(Debug::LEVEL_TRACE))   Debug::LogF(Debug::LEVEL_TRACE,   category, format, __VA_ARGS__); } while(0)

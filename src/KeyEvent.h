@@ -11,12 +11,11 @@ struct KeyEvent {
     bool extended;
     bool pressed;
     uint16_t scan_code;
-    std::string type;
 
-    KeyEvent() : vk_code(0), extended(false), pressed(false), scan_code(0), type(Config::MSG_TYPE_KEY) {}
+    KeyEvent() : vk_code(0), extended(false), pressed(false), scan_code(0) {}
 
-    KeyEvent(uint32_t vkCode, bool isPressed, uint16_t scanCode, bool isExtended = false) 
-        : vk_code(vkCode), pressed(isPressed), scan_code(scanCode), extended(isExtended), type(Config::MSG_TYPE_KEY) {}
+    KeyEvent(uint32_t vkCode, bool isPressed, uint16_t scanCode, bool isExtended = false)
+        : vk_code(vkCode), pressed(isPressed), scan_code(scanCode), extended(isExtended) {}
 
     json ToJson() const {
         return json{
@@ -24,7 +23,7 @@ struct KeyEvent {
             {"extended", extended},
             {"pressed", pressed},
             {"scan_code", scan_code},
-            {"type", type}
+            {"type", Config::MSG_TYPE_KEY}
         };
     }
 
@@ -34,7 +33,6 @@ struct KeyEvent {
         event.extended = j.at("extended").get<bool>();
         event.pressed = j.at("pressed").get<bool>();
         event.scan_code = j.at("scan_code").get<uint16_t>();
-        event.type = j.at("type").get<std::string>();
         return event;
     }
 

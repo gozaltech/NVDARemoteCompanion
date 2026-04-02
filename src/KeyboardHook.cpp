@@ -43,12 +43,7 @@ LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode
         KeyboardState::UpdateModifierState(vkCode, false);
 
         if (AppState::IsSendingKeys() || AppState::IsReleasingKeys()) {
-            bool isTracked = false;
-            for (const auto& pk : KeyboardState::GetAllPressedKeys()) {
-                if (pk.vkCode == vkCode) { isTracked = true; break; }
-            }
-            if (isTracked) {
-                KeyboardState::TrackKeyRelease(vkCode);
+            if (KeyboardState::TrackKeyRelease(vkCode)) {
                 KeyEvent keyEvent(static_cast<uint32_t>(vkCode), false, static_cast<uint16_t>(scanCode), isExtended);
                 MessageSender::SendKeyEvent(keyEvent);
                 return 1;

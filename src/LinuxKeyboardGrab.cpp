@@ -371,13 +371,8 @@ static void HandleKeyEvent(uint32_t evdevCode, int value) {
         KeyboardState::UpdateModifierState(vkCode, false);
 
         if (AppState::IsSendingKeys() || AppState::IsReleasingKeys()) {
-            bool isTracked = false;
-            for (const auto& pk : KeyboardState::GetAllPressedKeys()) {
-                if (pk.vkCode == vkCode) { isTracked = true; break; }
-            }
-            if (isTracked) {
+            if (KeyboardState::TrackKeyRelease(vkCode)) {
                 if (g_repeatKey.evdevCode == evdevCode) g_repeatKey.active = false;
-                KeyboardState::TrackKeyRelease(vkCode);
                 KeyEvent keyEvent(vkCode, false, scanCode, extended);
                 MessageSender::SendKeyEvent(keyEvent);
                 return;
