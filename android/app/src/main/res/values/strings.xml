@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NVDA Remote Companion</string>
+
+    <string name="notification_channel_name">Connection status</string>
+    <string name="notification_channel_desc">Shows active remote connections</string>
+    <string name="notification_no_connections">No active connections</string>
+    <plurals name="notification_connected">
+        <item quantity="one">%d profile connected</item>
+        <item quantity="other">%d profiles connected</item>
+    </plurals>
+
+    <string name="status_local">Status: Local</string>
+    <string name="status_sending_to">Sending keys to: %s</string>
+
+    <string name="profiles_list">Profiles</string>
+    <string name="no_profiles">No profiles configured. Tap Add Profile to create one.</string>
+    <string name="profile_connected">Connected</string>
+    <string name="profile_disconnected">Disconnected</string>
+    <string name="profile_active">Active — sending keys</string>
+
+    <string name="add_profile">Add Profile</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="set_active">Set Active</string>
+    <string name="go_local">Go Local</string>
+    <string name="edit">Edit</string>
+    <string name="save">Save</string>
+    <string name="delete_profile">Delete Profile</string>
+
+    <string name="connect_profile">Connect %s</string>
+    <string name="disconnect_profile">Disconnect %s</string>
+    <string name="set_active_profile">Set %s as active profile</string>
+    <string name="edit_profile">Edit %s</string>
+
+    <string name="add_profile_title">Add Profile</string>
+    <string name="edit_profile_title">Edit Profile</string>
+    <string name="field_name">Profile name (optional)</string>
+    <string name="field_host">Server address</string>
+    <string name="field_port">Port</string>
+    <string name="field_key">Connection key</string>
+    <string name="field_speech">Forward speech</string>
+    <string name="field_sounds">Forward NVDA sounds</string>
+    <string name="field_mute_on_local">Mute when not active</string>
+    <string name="field_auto_connect">Auto-connect on startup</string>
+    <string name="profile_saved">Profile saved</string>
+    <string name="profile_deleted">Profile deleted</string>
+
+    <string name="accessibility_service_description">Captures physical keyboard events and forwards them to the remote PC running NVDA.</string>
+    <string name="enable_accessibility_service">Enable Keyboard Capture (Accessibility Service)</string>
+    <string name="accessibility_dialog_title">Enable Keyboard Capture</string>
+    <string name="accessibility_dialog_message">NVDA Remote Companion needs the Accessibility Service enabled to capture physical keyboard events and forward them to the remote PC. On the next screen, find \"NVDA Remote Companion\" and enable it.</string>
+    <string name="open_settings">Open Settings</string>
+
+    <string name="tab_profiles">Profiles</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="pref_autostart">Start service on device boot</string>
+    <string name="pref_auto_connect">Auto-connect profiles on service start</string>
+    <string name="pref_accessibility_stream">Use accessibility audio stream for TTS</string>
+
+    <string name="tts_engine">TTS Engine</string>
+    <string name="select_tts_engine">Select TTS Engine</string>
+    <string name="tts_engine_default">System Default</string>
+
+    <string name="delete_confirm_message">Delete profile \"%s\"? This cannot be undone.</string>
+
+    <string name="export_config">Export Configuration</string>
+    <string name="import_config">Import Configuration</string>
+    <string name="export_success">Configuration exported</string>
+    <string name="export_failed">Export failed</string>
+    <string name="import_success">Configuration imported</string>
+    <string name="import_failed">Import failed: invalid or unreadable file</string>
+
+    <string name="error_loading_profile">Could not load profile</string>
+    <string name="error_saving_profile">Could not save profile</string>
+    <string name="error_host_key_required">Server address and key are required</string>
+    <string name="error_connect_failed">Failed to connect to %s</string>
+    <string name="error_connect_failed_generic">Failed to connect</string>
+</resources>

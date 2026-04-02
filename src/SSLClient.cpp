@@ -113,14 +113,22 @@ bool SSLClient::Connect(const std::string& host, int port) {
 void SSLClient::Disconnect() {
     DEBUG_VERBOSE("SSL", "Starting SSL disconnect");
     m_connectionState.TransitionTo(ConnectionState::Status::Disconnecting);
-    
+
     if (m_net_ctx.fd != -1) {
         DEBUG_VERBOSE("SSL", "Sending close notify");
         mbedtls_ssl_close_notify(&m_ssl_ctx);
     }
-    
+
     DEBUG_VERBOSE("SSL", "Cleaning up SSL resources");
     CleanupSSL();
+
+    // Re-initialize contexts so this SSLClient can be reused for reconnection
+    mbedtls_net_init(&m_net_ctx);
+    mbedtls_ssl_init(&m_ssl_ctx);
+    mbedtls_ssl_config_init(&m_ssl_conf);
+    mbedtls_entropy_init(&m_entropy);
+    mbedtls_ctr_drbg_init(&m_ctr_drbg);
+
     m_connectionState.TransitionTo(ConnectionState::Status::Disconnected);
     DEBUG_VERBOSE("SSL", "SSL disconnect completed");
 }

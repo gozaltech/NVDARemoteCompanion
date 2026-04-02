@@ -107,6 +107,10 @@ void CommandHandler::SetDisconnectCallback(std::function<void()> callback) {
     m_disconnectCallback = std::move(callback);
 }
 
+void CommandHandler::SetReconnectCallback(std::function<void()> callback) {
+    m_reconnectCallback = std::move(callback);
+}
+
 int CommandHandler::ConnectAutoProfiles() {
     int connected = 0;
     for (int i = 0; i < Config::isize(m_sessions); i++) {
@@ -149,6 +153,7 @@ bool CommandHandler::ConnectInteractive() {
     auto cm = std::make_unique<ConnectionManager>();
     cm->SetSpeechEnabled(true);
     if (m_disconnectCallback) cm->SetDisconnectCallback(m_disconnectCallback);
+    if (m_reconnectCallback) cm->SetReconnectCallback(m_reconnectCallback);
 
     if (!cm->EstablishConnection(paramsOpt->host, paramsOpt->port, paramsOpt->key, paramsOpt->shortcut)) {
         return false;
@@ -189,6 +194,9 @@ void CommandHandler::ConnectSession(int index) {
     session.connection->SetForwardAudioEnabled(p.forwardAudio);
     if (m_disconnectCallback) {
         session.connection->SetDisconnectCallback(m_disconnectCallback);
+    }
+    if (m_reconnectCallback) {
+        session.connection->SetReconnectCallback(m_reconnectCallback);
     }
 
     if (session.connection->EstablishConnection(p.host, p.port, p.key, p.shortcut)) {

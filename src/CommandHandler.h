@@ -31,6 +31,7 @@ public:
     void ToggleProfile(int index);
     void UpdateNetworkClients();
     void SetDisconnectCallback(std::function<void()> callback);
+    void SetReconnectCallback(std::function<void()> callback);
 
     int CountConnectedSessions() const;
     bool HasAnyConnected() const;
@@ -62,4 +63,5 @@ private:
     ConfigFileData m_configData;
     std::vector<ProfileSession> m_sessions;
     std::function<void()> m_disconnectCallback;
+    std::function<void()> m_reconnectCallback;
 };

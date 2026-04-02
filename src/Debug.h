@@ -3,6 +3,11 @@
 #include <string>
 #include <sstream>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#define ANDROID_LOG_TAG "NVDARemote"
+#endif
+
 class Debug {
 public:
     enum Level {
@@ -35,7 +40,18 @@ public:
             case LEVEL_TRACE:   prefix = "[TRACE]"; break;
         }
 
+#ifdef __ANDROID__
+        int androidLevel = ANDROID_LOG_DEBUG;
+        switch (level) {
+            case LEVEL_ERROR:   androidLevel = ANDROID_LOG_ERROR; break;
+            case LEVEL_WARNING: androidLevel = ANDROID_LOG_WARN;  break;
+            case LEVEL_INFO:    androidLevel = ANDROID_LOG_INFO;  break;
+            default:            androidLevel = ANDROID_LOG_DEBUG; break;
+        }
+        __android_log_print(androidLevel, ANDROID_LOG_TAG, "[%s] %s", category.c_str(), message.c_str());
+#else
         std::cout << prefix << " [" << category << "] " << message << std::endl;
+#endif
     }
 
     template<typename... Args>
