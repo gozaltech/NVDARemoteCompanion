@@ -3,7 +3,7 @@
 #include "Debug.h"
 #include <algorithm>
 #include <sstream>
-#include <map>
+#include <unordered_map>
 
 #define CTRL_KEY_1 VK_CONTROL
 #define CTRL_KEY_2 VK_LCONTROL
@@ -22,7 +22,6 @@ ShortcutConfig KeyboardState::g_exitShortcut;
 ShortcutConfig KeyboardState::g_reinstallHookShortcut;
 ShortcutConfig KeyboardState::g_localShortcut;
 ShortcutConfig KeyboardState::g_reconnectShortcut;
-std::set<NativeKeyType> KeyboardState::g_pressedKeys;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
 bool KeyboardState::IsControlKey(NativeKeyType vkCode) {
@@ -155,7 +154,7 @@ static NativeKeyType ParseKey(const std::string& keyName) {
         if (c >= '0' && c <= '9') return c;
     }
 
-    static std::map<std::string, NativeKeyType> keyMap = {
+    static std::unordered_map<std::string, NativeKeyType> keyMap = {
         {"space", VK_SPACE}, {"enter", VK_RETURN}, {"return", VK_RETURN},
         {"escape", VK_ESCAPE}, {"esc", VK_ESCAPE}, {"tab", VK_TAB},
         {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT},
@@ -206,25 +205,24 @@ void KeyboardState::ResetModifiers() {
 }
 
 void KeyboardState::TrackKeyPress(NativeKeyType vkCode, NativeScanType scanCode, bool extended) {
-    if (g_pressedKeys.find(vkCode) == g_pressedKeys.end()) {
-        g_pressedKeys.insert(vkCode);
-        g_pressedKeyDetails.push_back({vkCode, scanCode, extended});
+    for (const auto& pk : g_pressedKeyDetails) {
+        if (pk.vkCode == vkCode) return;
     }
+    g_pressedKeyDetails.push_back({vkCode, scanCode, extended});
 }
 
-void KeyboardState::TrackKeyRelease(NativeKeyType vkCode) {
-    g_pressedKeys.erase(vkCode);
-    g_pressedKeyDetails.erase(
-        std::remove_if(g_pressedKeyDetails.begin(), g_pressedKeyDetails.end(),
-                      [vkCode](const PressedKey& key) { return key.vkCode == vkCode; }),
-        g_pressedKeyDetails.end());
+bool KeyboardState::TrackKeyRelease(NativeKeyType vkCode) {
+    auto it = std::remove_if(g_pressedKeyDetails.begin(), g_pressedKeyDetails.end(),
+                             [vkCode](const PressedKey& key) { return key.vkCode == vkCode; });
+    if (it == g_pressedKeyDetails.end()) return false;
+    g_pressedKeyDetails.erase(it, g_pressedKeyDetails.end());
+    return true;
 }
 
-std::vector<PressedKey> KeyboardState::GetAllPressedKeys() {
+const std::vector<PressedKey>& KeyboardState::GetAllPressedKeys() {
     return g_pressedKeyDetails;
 }
 
 void KeyboardState::ClearPressedKeys() {
-    g_pressedKeys.clear();
     g_pressedKeyDetails.clear();
 }

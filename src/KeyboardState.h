@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <set>
 #include <vector>
 #include <string>
 
@@ -118,7 +117,6 @@ private:
     static bool g_winPressed;
     static bool g_altPressed;
     static bool g_shiftPressed;
-    static std::set<NativeKeyType> g_pressedKeys;
     static std::vector<PressedKey> g_pressedKeyDetails;
 
     static std::vector<ShortcutConfig> g_shortcuts;
@@ -159,8 +157,8 @@ public:
     static void ResetModifiers();
 
     static void TrackKeyPress(NativeKeyType vkCode, NativeScanType scanCode, bool extended);
-    static void TrackKeyRelease(NativeKeyType vkCode);
-    static std::vector<PressedKey> GetAllPressedKeys();
+    static bool TrackKeyRelease(NativeKeyType vkCode);
+    static const std::vector<PressedKey>& GetAllPressedKeys();
     static void ClearPressedKeys();
 
     static void ClearShortcuts();

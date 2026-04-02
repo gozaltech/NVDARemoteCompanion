@@ -102,8 +102,12 @@ bool NetworkClient::SendRawMessage(const std::string& message) {
     }
 
     {
+        std::string framed;
+        framed.reserve(message.size() + 1);
+        framed.append(message);
+        framed += '\n';
         std::lock_guard<std::mutex> lock(m_sendMutex);
-        m_sendQueue.push(message + "\n");
+        m_sendQueue.push(std::move(framed));
     }
     m_sendCondition.notify_one();
     
@@ -165,24 +169,26 @@ void NetworkClient::ReceiverThreadLoop() {
         int bytesReceived = m_sslClient.Receive(buffer, sizeof(buffer) - 1);
         
         if (bytesReceived > 0) {
-            buffer[bytesReceived] = '\0';
             DEBUG_TRACE_F("NETWORK", "Raw SSL received ({} bytes): {}", bytesReceived, std::string(buffer, bytesReceived));
-            receivedData += std::string(buffer, bytesReceived);
-            
+            receivedData.append(buffer, bytesReceived);
+
+            size_t searchFrom = 0;
             size_t pos;
-            while ((pos = receivedData.find('\n')) != std::string::npos) {
-                auto message = receivedData.substr(0, pos);
-                if (!message.empty() && message.back() == '\r') {
-                    message.pop_back();
-                }
-                receivedData.erase(0, pos + 1);
-                
-                if (!message.empty()) {
+            while ((pos = receivedData.find('\n', searchFrom)) != std::string::npos) {
+                size_t msgLen = pos - searchFrom;
+                if (msgLen > 0 && receivedData[searchFrom + msgLen - 1] == '\r') --msgLen;
+
+                if (msgLen > 0) {
+                    std::string message(receivedData.data() + searchFrom, msgLen);
                     DEBUG_VERBOSE_F("NETWORK", "Received message: {}", message);
                     if (m_messageHandler) {
                         m_messageHandler(message);
                     }
                 }
+                searchFrom = pos + 1;
+            }
+            if (searchFrom > 0) {
+                receivedData.erase(0, searchFrom);
             }
         } else if (bytesReceived == -2) {
             std::this_thread::sleep_for(std::chrono::milliseconds(Config::SENDER_SLEEP_MS));

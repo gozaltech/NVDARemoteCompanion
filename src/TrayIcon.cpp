@@ -27,9 +27,7 @@ void TrayIcon::SetReconnectAllCallback(std::function<void()> callback) {
 }
 
 void TrayIcon::RebuildMenu() {
-    while (GetMenuItemCount(s_menu.get()) > 0) {
-        RemoveMenu(s_menu.get(), 0, MF_BYPOSITION);
-    }
+    s_menu.reset(CreatePopupMenu());
 
     if (s_profileProvider) {
         auto profiles = s_profileProvider();
