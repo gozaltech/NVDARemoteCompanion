@@ -164,12 +164,16 @@ jobs:
     - name: Download Android APK
       uses: actions/download-artifact@v8
       with:
+        pattern: NVDARemoteCompanion-*.apk
         path: android-apk/
+        merge-multiple: true
 
     - name: Download Android AAB
       uses: actions/download-artifact@v8
       with:
+        pattern: NVDARemoteCompanion-*.aab
         path: android-aab/
+        merge-multiple: true
 
     - name: Create release archives
       run: |
