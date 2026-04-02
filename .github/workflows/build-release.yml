@@ -164,13 +164,11 @@ jobs:
     - name: Download Android APK
       uses: actions/download-artifact@v8
       with:
-        name: NVDARemoteCompanion-apk
         path: android-apk/
 
     - name: Download Android AAB
       uses: actions/download-artifact@v8
       with:
-        name: NVDARemoteCompanion-aab
         path: android-aab/
 
     - name: Create release archives
