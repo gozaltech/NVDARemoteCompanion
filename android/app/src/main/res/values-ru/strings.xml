@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NVDA Remote Companion</string>
+    <string name="notification_channel_name">Статус подключения</string>
+    <string name="notification_channel_desc">Показывает активные удалённые подключения</string>
+    <string name="notification_no_connections">Нет активных подключений</string>
+    <plurals name="notification_connected">
+        <item quantity="one">%d профиль подключён</item>
+        <item quantity="few">%d профиля подключено</item>
+        <item quantity="many">%d профилей подключено</item>
+        <item quantity="other">%d профилей подключено</item>
+    </plurals>
+
+    <string name="status_local">Статус: Локальный</string>
+    <string name="status_sending_to">Отправка клавиш: %s</string>
+
+    <string name="profiles_list">Профили</string>
+    <string name="no_profiles">Профили не настроены. Нажмите «Добавить профиль» для создания.</string>
+    <string name="profile_connected">Подключён</string>
+    <string name="profile_disconnected">Отключён</string>
+    <string name="profile_active">Активен — отправка клавиш</string>
+
+    <string name="add_profile">Добавить профиль</string>
+    <string name="connect">Подключить</string>
+    <string name="disconnect">Отключить</string>
+    <string name="set_active">Сделать активным</string>
+    <string name="go_local">Локальный режим</string>
+    <string name="edit">Изменить</string>
+    <string name="save">Сохранить</string>
+    <string name="delete_profile">Удалить профиль</string>
+
+    <string name="connect_profile">Подключить %s</string>
+    <string name="disconnect_profile">Отключить %s</string>
+    <string name="set_active_profile">Сделать %s активным профилем</string>
+    <string name="edit_profile">Изменить %s</string>
+
+    <string name="add_profile_title">Добавить профиль</string>
+    <string name="edit_profile_title">Изменить профиль</string>
+    <string name="field_name">Название профиля (необязательно)</string>
+    <string name="field_host">Адрес сервера</string>
+    <string name="field_port">Порт</string>
+    <string name="field_key">Ключ подключения</string>
+    <string name="field_speech">Перенаправлять речь</string>
+    <string name="field_sounds">Перенаправлять звуки NVDA</string>
+    <string name="field_mute_on_local">Заглушать при неактивном профиле</string>
+    <string name="field_auto_connect">Автоподключение при запуске</string>
+    <string name="profile_saved">Профиль сохранён</string>
+    <string name="profile_deleted">Профиль удалён</string>
+
+    <string name="accessibility_service_description">Перехватывает нажатия физических клавиш и перенаправляет их на удалённый компьютер с NVDA.</string>
+    <string name="enable_accessibility_service">Включить захват клавиатуры (служба доступности)</string>
+    <string name="accessibility_dialog_title">Включить захват клавиатуры</string>
+    <string name="accessibility_dialog_message">NVDA Remote Companion требует включения службы доступности для перехвата нажатий физических клавиш и их перенаправления на удалённый ПК. На следующем экране найдите «NVDA Remote Companion» и включите службу.</string>
+    <string name="open_settings">Открыть настройки</string>
+
+    <string name="tab_profiles">Профили</string>
+    <string name="tab_settings">Настройки</string>
+    <string name="tab_about">О программе</string>
+
+    <string name="pref_autostart">Запускать службу при загрузке устройства</string>
+    <string name="pref_auto_connect">Автоподключение профилей при запуске службы</string>
+    <string name="pref_accessibility_stream">Использовать поток доступности для TTS</string>
+
+    <string name="speech_output_header">Вывод речи</string>
+    <string name="speech_mode_tts">Синтез речи</string>
+    <string name="speech_mode_screen_reader">Программа экранного доступа</string>
+    <string name="tts_pitch">Высота тона</string>
+    <string name="tts_rate">Скорость</string>
+    <string name="tts_volume">Громкость</string>
+
+    <string name="pref_language">Язык</string>
+    <string name="language_system">Системный</string>
+
+    <string name="tts_engine">Движок синтеза речи</string>
+    <string name="select_tts_engine">Выбрать движок синтеза речи</string>
+    <string name="tts_engine_default">Системный по умолчанию</string>
+
+    <string name="delete_confirm_message">Удалить профиль «%s»? Это действие нельзя отменить.</string>
+
+    <string name="battery_optimization">Отключить оптимизацию батареи</string>
+    <string name="battery_optimization_already_exempt">Оптимизация батареи уже отключена</string>
+
+    <string name="export_config">Экспорт конфигурации</string>
+    <string name="import_config">Импорт конфигурации</string>
+    <string name="export_success">Конфигурация экспортирована</string>
+    <string name="export_failed">Ошибка экспорта</string>
+    <string name="import_success">Конфигурация импортирована</string>
+    <string name="import_failed">Ошибка импорта: неверный или нечитаемый файл</string>
+
+    <string name="error_loading_profile">Не удалось загрузить профиль</string>
+    <string name="error_saving_profile">Не удалось сохранить профиль</string>
+    <string name="error_host_key_required">Адрес сервера и ключ обязательны к заполнению</string>
+    <string name="error_connect_failed">Не удалось подключиться к %s</string>
+    <string name="error_connect_failed_generic">Не удалось подключиться</string>
+
+    <string name="about_description">NVDA Remote Companion позволяет управлять удалённым компьютером с программой экранного доступа NVDA с вашего Android-устройства. Приложение перенаправляет ввод с клавиатуры и передаёт речь и звуки по защищённому соединению.</string>
+    <string name="about_author">Автор: Бека Гозалишвили (gozaltech)</string>
+    <string name="about_version">Версия: %s</string>
+    <string name="about_github">Репозиторий GitHub</string>
+    <string name="about_contact">Написать в Telegram</string>
+    <string name="about_report_issue">Сообщить о проблеме</string>
+    <string name="about_donate">Поддержать проект</string>
+</resources>

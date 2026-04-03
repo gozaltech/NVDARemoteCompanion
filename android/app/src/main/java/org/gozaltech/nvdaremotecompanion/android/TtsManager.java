@@ -6,8 +6,11 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,17 +50,23 @@ public class TtsManager implements TextToSpeech.OnInitListener {
         }
     }
 
+    private final Context context;
     private TextToSpeech tts;
     private boolean ready = false;
     private boolean useAccessibilityStream = false;
+    private boolean screenReaderMode = false;
+    private float pitch  = 1.0f;
+    private float rate   = 1.0f;
+    private float volume = 1.0f;
 
     private final List<String[]> pendingQueue = new ArrayList<>();
 
     public TtsManager(Context context, String enginePackage) {
+        this.context = context.getApplicationContext();
         if (enginePackage != null) {
-            tts = new TextToSpeech(context, this, enginePackage);
+            tts = new TextToSpeech(this.context, this, enginePackage);
         } else {
-            tts = new TextToSpeech(context, this);
+            tts = new TextToSpeech(this.context, this);
         }
     }
 
@@ -70,6 +79,8 @@ public class TtsManager implements TextToSpeech.OnInitListener {
         if (status == TextToSpeech.SUCCESS) {
             tts.setLanguage(Locale.getDefault());
             applyAudioAttributes();
+            tts.setPitch(pitch);
+            tts.setSpeechRate(rate);
             ready = true;
             Log.i(TAG, "TTS engine ready");
             synchronized (pendingQueue) {
@@ -88,6 +99,24 @@ public class TtsManager implements TextToSpeech.OnInitListener {
         if (ready) applyAudioAttributes();
     }
 
+    public void setScreenReaderMode(boolean use) {
+        screenReaderMode = use;
+    }
+
+    public void setPitch(float value) {
+        pitch = value;
+        if (ready && tts != null) tts.setPitch(value);
+    }
+
+    public void setRate(float value) {
+        rate = value;
+        if (ready && tts != null) tts.setSpeechRate(value);
+    }
+
+    public void setVolume(float value) {
+        volume = value;
+    }
+
     private void applyAudioAttributes() {
         AudioAttributes.Builder builder = new AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH);
@@ -102,6 +131,10 @@ public class TtsManager implements TextToSpeech.OnInitListener {
     }
 
     public void speak(String text, boolean interrupt) {
+        if (screenReaderMode) {
+            announceViaAccessibility(text);
+            return;
+        }
         if (!ready) {
             synchronized (pendingQueue) {
                 if (interrupt) pendingQueue.clear();
@@ -112,10 +145,24 @@ public class TtsManager implements TextToSpeech.OnInitListener {
         speakNow(text, interrupt);
     }
 
+    private void announceViaAccessibility(String text) {
+        AccessibilityManager am = (AccessibilityManager)
+                context.getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) return;
+        AccessibilityEvent event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT);
+        event.getText().add(text);
+        am.sendAccessibilityEvent(event);
+    }
+
     private void speakNow(String text, boolean interrupt) {
         if (tts == null) return;
         int queueMode = interrupt ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD;
-        tts.speak(text, queueMode, null, null);
+        Bundle params = null;
+        if (volume != 1.0f) {
+            params = new Bundle();
+            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
+        }
+        tts.speak(text, queueMode, params, null);
     }
 
     public void stop() {
