@@ -27,6 +27,7 @@ public final class ProfileRepository {
         config.put("profiles", profiles);
         config.put("schema_version", 1);
         NativeBridge.nativeLoadConfig(config.toString(4));
+        NativeBridge.syncConnectionStates();
     }
 
     public static void deleteProfile(int index) throws Exception {
