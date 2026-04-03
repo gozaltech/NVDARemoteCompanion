@@ -100,4 +100,23 @@
     <string name="about_contact">Написать в Telegram</string>
     <string name="about_report_issue">Сообщить о проблеме</string>
     <string name="about_donate">Поддержать проект</string>
+
+    <string name="update_check">Проверить обновления</string>
+    <string name="update_checking">Проверка обновлений…</string>
+    <string name="update_up_to_date">У вас установлена последняя версия.</string>
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_available">Доступно обновление: v%s</string>
+    <string name="update_version_line">Текущая: %1$s  →  Новая: %2$s</string>
+    <string name="update_changelog">Что нового</string>
+    <string name="update_no_changelog">Примечания к выпуску отсутствуют.</string>
+    <string name="update_download">Загрузить обновление</string>
+    <string name="update_later">Позже</string>
+    <string name="update_downloading_title">Загрузка обновления…</string>
+    <string name="update_downloading">Загрузка… %d%%</string>
+    <string name="update_cancel_confirm">Отменить загрузку?</string>
+    <string name="update_ready">Версия %s готова к установке.</string>
+    <string name="update_install">Установить обновление</string>
+    <string name="update_error">Не удалось проверить обновления. Попробуйте позже.</string>
+    <string name="update_signature_mismatch">Обновление отклонено: сертификат загруженного файла не совпадает с установленным приложением.</string>
+    <string name="update_install_failed">Ошибка установки обновления: %s</string>
 </resources>

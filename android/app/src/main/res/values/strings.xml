@@ -99,4 +99,23 @@
     <string name="error_host_key_required">Server address and key are required</string>
     <string name="error_connect_failed">Failed to connect to %s</string>
     <string name="error_connect_failed_generic">Failed to connect</string>
+
+    <string name="update_check">Check for Updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are on the latest version.</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available">Update available: v%s</string>
+    <string name="update_version_line">Current: %1$s  →  New: %2$s</string>
+    <string name="update_changelog">What\'s new</string>
+    <string name="update_no_changelog">No release notes available.</string>
+    <string name="update_download">Download Update</string>
+    <string name="update_later">Update Later</string>
+    <string name="update_downloading_title">Downloading update…</string>
+    <string name="update_downloading">Downloading… %d%%</string>
+    <string name="update_cancel_confirm">Cancel the download?</string>
+    <string name="update_ready">Version %s is ready to install.</string>
+    <string name="update_install">Install Update</string>
+    <string name="update_error">Could not check for updates. Please try again later.</string>
+    <string name="update_signature_mismatch">Update rejected: the downloaded file\'s certificate does not match the installed app.</string>
+    <string name="update_install_failed">Update installation failed: %s</string>
 </resources>
