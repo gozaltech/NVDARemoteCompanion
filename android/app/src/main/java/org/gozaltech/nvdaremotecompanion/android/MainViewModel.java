@@ -87,12 +87,32 @@ public class MainViewModel extends AndroidViewModel {
         if (connectionService != null) connectionService.setTtsEngine(enginePackage);
     }
 
+    public void setScreenReaderMode(boolean use) {
+        if (connectionService != null) connectionService.setScreenReaderMode(use);
+        else AppPrefs.setScreenReaderMode(getApplication(), use);
+    }
+
     public void setUseAccessibilityStream(boolean use) {
         if (connectionService != null) {
             connectionService.setUseAccessibilityStream(use);
         } else {
             AppPrefs.setAccessibilityStream(getApplication(), use);
         }
+    }
+
+    public void setTtsPitch(float value) {
+        if (connectionService != null) connectionService.setTtsPitch(value);
+        else AppPrefs.setTtsPitch(getApplication(), value);
+    }
+
+    public void setTtsRate(float value) {
+        if (connectionService != null) connectionService.setTtsRate(value);
+        else AppPrefs.setTtsRate(getApplication(), value);
+    }
+
+    public void setTtsVolume(float value) {
+        if (connectionService != null) connectionService.setTtsVolume(value);
+        else AppPrefs.setTtsVolume(getApplication(), value);
     }
 
     public void exportConfig(Uri uri, ContentResolver resolver) {
@@ -121,7 +141,7 @@ public class MainViewModel extends AndroidViewModel {
                 String json = sb.toString();
                 new JSONObject(json);
                 NativeBridge.nativeLoadConfig(json);
-                NativeBridge.syncConnectionStates();
+                refreshProfiles();
                 postToast(R.string.import_success);
             } catch (Exception e) {
                 postToast(R.string.import_failed);
@@ -130,24 +150,21 @@ public class MainViewModel extends AndroidViewModel {
     }
 
     private void refreshProfiles() {
-        ConnectionService svc = connectionService;
-        if (svc == null) return;
-
-        int count = svc.getProfileCount();
-        int activeProfile = svc.getActiveProfile();
+        int count = NativeBridge.nativeGetProfileCount();
+        int activeProfile = NativeBridge.nativeGetActiveProfile();
 
         List<ProfileUiState> list = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            String name = svc.getProfileName(i);
+            String name = NativeBridge.nativeGetProfileName(i);
             String displayName = name.isEmpty()
                     ? getApplication().getString(R.string.app_name) : name;
-            list.add(new ProfileUiState(i, displayName, svc.isConnected(i), activeProfile == i));
+            list.add(new ProfileUiState(i, displayName, NativeBridge.nativeIsConnected(i), activeProfile == i));
         }
         profilesLive.postValue(list);
 
         String status = activeProfile >= 0
                 ? getApplication().getString(R.string.status_sending_to,
-                        svc.getProfileName(activeProfile))
+                        NativeBridge.nativeGetProfileName(activeProfile))
                 : getApplication().getString(R.string.status_local);
         statusLive.postValue(status);
     }

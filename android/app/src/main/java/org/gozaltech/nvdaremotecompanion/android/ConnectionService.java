@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.os.PowerManager;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
@@ -48,6 +49,7 @@ public class ConnectionService extends Service {
     private TtsManager ttsManager;
     private NvdaAudioManager audioManager;
     private boolean initialized = false;
+    private PowerManager.WakeLock wakeLock;
 
     private final Set<Integer> desiredConnected =
             Collections.synchronizedSet(new HashSet<>());
@@ -94,7 +96,14 @@ public class ConnectionService extends Service {
         String enginePkg = AppPrefs.getTtsEngine(this);
         ttsManager = new TtsManager(getApplicationContext(), enginePkg);
         ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
+        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
+        ttsManager.setRate(AppPrefs.getTtsRate(this));
+        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
         audioManager = new NvdaAudioManager(getApplicationContext());
+
+        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NVDARemote:connection");
 
         NativeBridge.nativeInit(ttsManager, audioManager, getFilesDir().getAbsolutePath());
         initialized = true;
@@ -133,6 +142,7 @@ public class ConnectionService extends Service {
             NativeBridge.nativeShutdown();
             initialized = false;
         }
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         ttsManager.shutdown();
         Log.i(TAG, "ConnectionService destroyed");
         super.onDestroy();
@@ -167,7 +177,11 @@ public class ConnectionService extends Service {
     public void setTtsEngine(String enginePackage) {
         ttsManager.shutdown();
         ttsManager = new TtsManager(getApplicationContext(), enginePackage);
+        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
         ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
+        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
+        ttsManager.setRate(AppPrefs.getTtsRate(this));
+        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
         NativeBridge.nativeUpdateTtsManager(ttsManager);
         AppPrefs.setTtsEngine(this, enginePackage);
     }
@@ -175,6 +189,26 @@ public class ConnectionService extends Service {
     public void setUseAccessibilityStream(boolean use) {
         ttsManager.setUseAccessibilityStream(use);
         AppPrefs.setAccessibilityStream(this, use);
+    }
+
+    public void setScreenReaderMode(boolean use) {
+        ttsManager.setScreenReaderMode(use);
+        AppPrefs.setScreenReaderMode(this, use);
+    }
+
+    public void setTtsPitch(float value) {
+        ttsManager.setPitch(value);
+        AppPrefs.setTtsPitch(this, value);
+    }
+
+    public void setTtsRate(float value) {
+        ttsManager.setRate(value);
+        AppPrefs.setTtsRate(this, value);
+    }
+
+    public void setTtsVolume(float value) {
+        ttsManager.setVolume(value);
+        AppPrefs.setTtsVolume(this, value);
     }
 
     public void deleteProfile(int profileIndex) {
@@ -262,5 +296,10 @@ public class ConnectionService extends Service {
         int count = 0;
         for (boolean v : states.values()) if (v) count++;
         getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, buildNotification(count));
+        if (count > 0) {
+            if (!wakeLock.isHeld()) wakeLock.acquire();
+        } else {
+            if (wakeLock.isHeld()) wakeLock.release();
+        }
     }
 }
