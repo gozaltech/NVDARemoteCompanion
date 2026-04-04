@@ -24,7 +24,15 @@ public final class ProfileRepository {
             profiles.put(profile);
         }
 
-        config.put("profiles", profiles);
+        JSONArray cleaned = new JSONArray();
+        for (int i = 0; i < profiles.length(); i++) {
+            JSONObject p = profiles.optJSONObject(i);
+            if (p != null && !p.optString("host").isEmpty() && !p.optString("key").isEmpty()) {
+                cleaned.put(p);
+            }
+        }
+
+        config.put("profiles", cleaned);
         config.put("schema_version", 1);
         NativeBridge.nativeLoadConfig(config.toString(4));
         NativeBridge.syncConnectionStates();
