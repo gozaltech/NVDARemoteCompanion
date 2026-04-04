@@ -1,5 +1,6 @@
 #include "AppState.h"
 #include "KeyboardState.h"
+#include <algorithm>
 #include "MessageSender.h"
 #include "KeyEvent.h"
 #include "Audio.h"
@@ -93,6 +94,20 @@ void AppState::CycleProfile() {
 void AppState::SetConnectedProfiles(const std::vector<int>& indices, const std::vector<std::string>& names) {
     g_connectedProfiles = indices;
     g_profileNames = names;
+
+    if (g_activeProfile >= 0) {
+        bool stillConnected = std::find(indices.begin(), indices.end(), g_activeProfile) != indices.end();
+        if (!stillConnected) {
+            if (g_forwardingKeys) ReleaseAllKeys();
+            g_forwardingKeys = false;
+            g_activeProfile = -1;
+        }
+    }
+
+    if (g_activeProfile < 0 && !indices.empty()) {
+        g_activeProfile = indices[0];
+        MessageSender::SetActiveProfile(g_activeProfile);
+    }
 }
 
 bool AppState::IsReleasingKeys() {

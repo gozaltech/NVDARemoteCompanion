@@ -32,8 +32,9 @@ static ConfigFileData g_config;
 static std::string g_configPath;
 static std::mutex g_managersMutex;
 
-static jclass    g_bridgeClass        = nullptr;
-static jmethodID g_onConnStateChanged = nullptr;
+static jclass    g_bridgeClass          = nullptr;
+static jmethodID g_onConnStateChanged   = nullptr;
+static jmethodID g_onForwardingChanged  = nullptr;
 
 static JNIEnv* GetEnv(bool& didAttach) {
     didAttach = false;
@@ -48,6 +49,16 @@ static JNIEnv* GetEnv(bool& didAttach) {
         }
     }
     return env;
+}
+
+void NotifyForwardingState(bool forwarding) {
+    if (!g_bridgeClass || !g_onForwardingChanged) return;
+    bool didAttach = false;
+    JNIEnv* env = GetEnv(didAttach);
+    if (!env) return;
+    env->CallStaticVoidMethod(g_bridgeClass, g_onForwardingChanged,
+                              static_cast<jboolean>(forwarding));
+    if (didAttach) g_jvm->DetachCurrentThread();
 }
 
 static void NotifyConnectionState(int profileIndex, bool connected) {
@@ -135,6 +146,10 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
                 g_bridgeClass, "onConnectionStateChanged", "(IZ)V");
         if (!g_onConnStateChanged)
             LOGE("onConnectionStateChanged method not found");
+        g_onForwardingChanged = env->GetStaticMethodID(
+                g_bridgeClass, "onForwardingStateChanged", "(Z)V");
+        if (!g_onForwardingChanged)
+            LOGE("onForwardingStateChanged method not found");
         AndroidClipboard::Initialize(env, g_bridgeClass);
     }
 
@@ -470,6 +485,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetActiveProfi
         jint profileIndex) {
 
     AppState::SetActiveProfile(static_cast<int>(profileIndex));
+    NotifyForwardingState(AppState::IsSendingKeys());
 }
 
 JNIEXPORT void JNICALL
@@ -477,6 +493,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeToggleForwardi
         JNIEnv*, jobject) {
 
     AppState::ToggleForwarding();
+    NotifyForwardingState(AppState::IsSendingKeys());
 }
 
 JNIEXPORT jboolean JNICALL
@@ -494,6 +511,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeProcessModifie
     if (KeyboardState::CheckForwardKeysShortcut(vk)) {
         KeyboardState::ResetModifiers();
         AppState::ToggleForwarding();
+        NotifyForwardingState(AppState::IsSendingKeys());
         return JNI_TRUE;
     }
 
@@ -502,12 +520,14 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeProcessModifie
     if (KeyboardState::CheckCycleShortcut(vk)) {
         KeyboardState::ResetModifiers();
         AppState::CycleProfile();
+        NotifyForwardingState(AppState::IsSendingKeys());
         return JNI_TRUE;
     }
     int toggleIdx = KeyboardState::CheckToggleShortcut(vk);
     if (toggleIdx >= 0) {
         KeyboardState::ResetModifiers();
         AppState::SetActiveProfile(toggleIdx);
+        NotifyForwardingState(AppState::IsSendingKeys());
         return JNI_TRUE;
     }
     if (KeyboardState::CheckClipboardShortcut(vk)) {

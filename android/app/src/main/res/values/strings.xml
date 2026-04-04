@@ -11,13 +11,15 @@
     </plurals>
 
     <string name="status_local">Status: Local</string>
+    <string name="status_active_profile">Active: %s</string>
     <string name="status_sending_to">Sending keys to: %s</string>
 
     <string name="profiles_list">Profiles</string>
     <string name="no_profiles">No profiles configured. Tap Add Profile to create one.</string>
     <string name="profile_connected">Connected</string>
     <string name="profile_disconnected">Disconnected</string>
-    <string name="profile_active">Active — sending keys</string>
+    <string name="profile_active">Active</string>
+    <string name="profile_sending_keys">Active — sending keys</string>
 
     <string name="add_profile">Add Profile</string>
     <string name="connect">Connect</string>

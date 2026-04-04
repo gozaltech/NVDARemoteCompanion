@@ -115,6 +115,13 @@ public class NativeBridge {
     public static native void nativeSendClipboardText(String text, int profileIndex);
 
     @Keep
+    public static void onForwardingStateChanged(boolean forwarding) {
+        for (ConnectionStateListener l : listeners) {
+            l.onConnectionStatesChanged(Collections.unmodifiableMap(new HashMap<>(connectionStates)));
+        }
+    }
+
+    @Keep
     public static void onClipboardShortcutTriggered() {
         if (appContext == null) return;
         new Handler(Looper.getMainLooper()).post(() -> {

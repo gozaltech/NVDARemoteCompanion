@@ -79,7 +79,6 @@ public class MainViewModel extends AndroidViewModel {
 
     public void toggleForwarding() {
         if (connectionService != null) connectionService.toggleForwarding();
-        sendingKeysLive.postValue(NativeBridge.nativeIsSendingKeys());
     }
 
 public void deleteProfile(int index) {
@@ -162,15 +161,22 @@ public void deleteProfile(int index) {
             String name = NativeBridge.nativeGetProfileName(i);
             String displayName = name.isEmpty()
                     ? getApplication().getString(R.string.app_name) : name;
-            list.add(new ProfileUiState(i, displayName, NativeBridge.nativeIsConnected(i), activeProfile == i));
+            boolean connected = NativeBridge.nativeIsConnected(i);
+            list.add(new ProfileUiState(i, displayName, connected, connected && activeProfile == i));
         }
         profilesLive.postValue(list);
         sendingKeysLive.postValue(NativeBridge.nativeIsSendingKeys());
 
-        String status = activeProfile >= 0
-                ? getApplication().getString(R.string.status_sending_to,
-                        NativeBridge.nativeGetProfileName(activeProfile))
-                : getApplication().getString(R.string.status_local);
+        String status;
+        if (NativeBridge.nativeIsSendingKeys()) {
+            status = getApplication().getString(R.string.status_sending_to,
+                    NativeBridge.nativeGetProfileName(activeProfile));
+        } else if (activeProfile >= 0) {
+            status = getApplication().getString(R.string.status_active_profile,
+                    NativeBridge.nativeGetProfileName(activeProfile));
+        } else {
+            status = getApplication().getString(R.string.status_local);
+        }
         statusLive.postValue(status);
     }
 

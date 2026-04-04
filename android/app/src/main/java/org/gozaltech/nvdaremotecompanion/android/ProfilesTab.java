@@ -86,9 +86,16 @@ class ProfilesTab {
     }
 
     private View buildProfileCard(ProfileUiState p) {
-        String statusText = p.active   ? activity.getString(R.string.profile_active)
-                : p.connected          ? activity.getString(R.string.profile_connected)
-                :                        activity.getString(R.string.profile_disconnected);
+        String statusText;
+        if (p.active && NativeBridge.nativeIsSendingKeys()) {
+            statusText = activity.getString(R.string.profile_sending_keys);
+        } else if (p.active) {
+            statusText = activity.getString(R.string.profile_active);
+        } else if (p.connected) {
+            statusText = activity.getString(R.string.profile_connected);
+        } else {
+            statusText = activity.getString(R.string.profile_disconnected);
+        }
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
