@@ -219,15 +219,31 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         if (ec) return false;
     }
 
+    nlohmann::ordered_json profile = {
+        {"name",                 ""},
+        {"host",                 ""},
+        {"port",                 6837},
+        {"key",                  ""},
+        {"shortcut",             ""},
+        {"auto_connect",         true},
+        {"speech",               true},
+        {"mute_on_local_control", false},
+        {"forward_nvda_sounds",  true}
+    };
+
     nlohmann::ordered_json j = {
         {"schema_version", CURRENT_SCHEMA_VERSION},
-        {"debug_level", "warning"},
-        {"background", false},
-        {"audio", true},
+        {"debug_level",    "warning"},
+        {"background",     false},
+        {"audio",          true},
         {"shortcuts", nlohmann::ordered_json({
-            {"cycle", "ctrl+alt+f11"}
+            {"cycle",          "ctrl+alt+f11"},
+            {"local",          ""},
+            {"exit",           ""},
+            {"reinstall_hook", ""},
+            {"reconnect",      ""}
         })},
-        {"profiles", nlohmann::ordered_json::array()}
+        {"profiles", nlohmann::ordered_json::array({profile})}
     };
 
     std::ofstream file(path);
