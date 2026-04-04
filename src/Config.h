@@ -5,7 +5,13 @@
 #include <algorithm>
 
 namespace Config {
-    
+
+#ifdef _WIN32
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT = "ctrl+alt+f11";
+#else
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT = "ctrl+shift+f11";
+#endif
+
     constexpr int DEFAULT_PORT = 6837;
     constexpr int MIN_PORT = 1;
     constexpr int MAX_PORT = 65535;

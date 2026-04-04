@@ -473,7 +473,7 @@ int main(int argc, char* argv[]) {
     {
         std::string cycleSc = args.cycleShortcut;
         if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
-        if (cycleSc.empty()) cycleSc = "ctrl+alt+f11";
+        if (cycleSc.empty()) cycleSc = Config::DEFAULT_CYCLE_SHORTCUT;
         KeyboardState::SetCycleShortcut(cycleSc);
 
         if (cfg.exitShortcut && !cfg.exitShortcut->empty())

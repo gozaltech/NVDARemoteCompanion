@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 
+
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
@@ -237,7 +238,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"background",     false},
         {"audio",          true},
         {"shortcuts", nlohmann::ordered_json({
-            {"cycle",          "ctrl+alt+f11"},
+            {"cycle",          Config::DEFAULT_CYCLE_SHORTCUT},
             {"local",          ""},
             {"exit",           ""},
             {"reinstall_hook", ""},
@@ -262,7 +263,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     j["audio"] = data.audio.value_or(true);
     {
         nlohmann::ordered_json sc;
-        sc["cycle"] = data.cycleShortcut.value_or("ctrl+alt+f11");
+        sc["cycle"] = data.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
         if (data.exitShortcut)           sc["exit"]           = *data.exitShortcut;
         if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
         if (data.localShortcut)          sc["local"]          = *data.localShortcut;
