@@ -155,62 +155,73 @@ bool ConfigFile::Migrate(const std::string& path) {
     return true;
 }
 
-ConfigFileData ConfigFile::Load(const std::string& path) {
+static ConfigFileData ParseConfigJson(const nlohmann::json& j) {
     ConfigFileData data;
-    if (path.empty()) return data;
+
+    ReadJson(j, "debug_level", data.debugLevel);
+    ReadJson(j, "background",  data.background);
+    ReadJson(j, "audio",       data.audio);
+
+    if (j.contains("shortcuts") && j["shortcuts"].is_object()) {
+        const auto& sc = j["shortcuts"];
+        ReadJson(sc, "cycle",          data.cycleShortcut);
+        ReadJson(sc, "exit",           data.exitShortcut);
+        ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
+        ReadJson(sc, "reconnect",      data.reconnectShortcut);
+        ReadJson(sc, "clipboard",      data.clipboardShortcut);
+        ReadJson(sc, "forward_keys",   data.forwardKeysShortcut);
+    }
+
+    if (j.contains("profiles") && j["profiles"].is_array()) {
+        for (const auto& pj : j["profiles"]) {
+            if (pj.is_object()) {
+                auto profile = ParseProfile(pj);
+                if (!profile.host.empty() && !profile.key.empty()) {
+                    if (profile.name.empty()) profile.name = profile.host;
+                    data.profiles.push_back(std::move(profile));
+                } else if (!profile.name.empty() || !profile.host.empty() || !profile.key.empty()) {
+                    std::string name = profile.name.empty() ? "(unnamed)" : profile.name;
+                    DEBUG_WARN_F("CONFIG", "Skipping profile '{}': host and key are both required", name);
+                }
+            }
+        }
+    }
+
+    ReadJson(j, "host",     data.host);
+    ReadJson(j, "port",     data.port);
+    ReadJson(j, "key",      data.key);
+    ReadJson(j, "shortcut", data.shortcut);
+
+    return data;
+}
+
+ConfigFileData ConfigFile::Load(const std::string& path) {
+    if (path.empty()) return {};
 
     std::ifstream file(path);
     if (!file.is_open()) {
         DEBUG_WARN("CONFIG", "Could not open config file: " + path);
-        return data;
+        return {};
     }
 
     try {
-        nlohmann::json j = nlohmann::json::parse(file);
-
-        ReadJson(j, "debug_level", data.debugLevel);
-        ReadJson(j, "background",  data.background);
-        ReadJson(j, "audio",       data.audio);
-
-        if (j.contains("shortcuts") && j["shortcuts"].is_object()) {
-            const auto& sc = j["shortcuts"];
-            ReadJson(sc, "cycle",          data.cycleShortcut);
-            ReadJson(sc, "exit",           data.exitShortcut);
-            ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
-ReadJson(sc, "reconnect",      data.reconnectShortcut);
-            ReadJson(sc, "clipboard",      data.clipboardShortcut);
-            ReadJson(sc, "forward_keys",   data.forwardKeysShortcut);
-        }
-
-        if (j.contains("profiles") && j["profiles"].is_array()) {
-            for (const auto& pj : j["profiles"]) {
-                if (pj.is_object()) {
-                    auto profile = ParseProfile(pj);
-                    if (!profile.host.empty() && !profile.key.empty()) {
-                        if (profile.name.empty()) {
-                            profile.name = profile.host;
-                        }
-                        data.profiles.push_back(std::move(profile));
-                    } else if (!profile.name.empty() || !profile.host.empty() || !profile.key.empty()) {
-                        std::string name = profile.name.empty() ? "(unnamed)" : profile.name;
-                        DEBUG_WARN_F("CONFIG", "Skipping profile '{}': host and key are both required", name);
-                    }
-                }
-            }
-        }
-
-        ReadJson(j, "host",     data.host);
-        ReadJson(j, "port",     data.port);
-        ReadJson(j, "key",      data.key);
-        ReadJson(j, "shortcut", data.shortcut);
-
+        ConfigFileData data = ParseConfigJson(nlohmann::json::parse(file));
         DEBUG_INFO("CONFIG", "Loaded config from: " + path);
+        return data;
     } catch (const nlohmann::json::exception& e) {
         std::cerr << "Error: Failed to parse config file '" << path << "': " << e.what() << std::endl;
         DEBUG_WARN("CONFIG", "Failed to parse config file: " + std::string(e.what()));
+        return {};
     }
+}
 
-    return data;
+ConfigFileData ConfigFile::LoadFromString(const std::string& jsonStr) {
+    try {
+        return ParseConfigJson(nlohmann::json::parse(jsonStr));
+    } catch (const nlohmann::json::exception& e) {
+        DEBUG_WARN("CONFIG", "Failed to parse config string: " + std::string(e.what()));
+        return {};
+    }
 }
 
 bool ConfigFile::CreateDefault(const std::string& path) {

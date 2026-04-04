@@ -19,9 +19,6 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -228,31 +225,14 @@ public class ConnectionService extends Service {
         if (!AppPrefs.getAutoConnect(this)) return;
         executor.submit(() -> {
             int count = NativeBridge.nativeGetProfileCount();
-            List<Boolean> autoFlags = parseAutoConnect(NativeBridge.nativeGetConfigJson(), count);
             for (int i = 0; i < count; i++) {
-                if (autoFlags.get(i)) {
+                if (NativeBridge.nativeGetAutoConnect(i)) {
                     Log.i(TAG, "Auto-connecting profile " + i);
                     desiredConnected.add(i);
                     NativeBridge.nativeConnect(i);
                 }
             }
         });
-    }
-
-    private List<Boolean> parseAutoConnect(String json, int count) {
-        List<Boolean> result = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) result.add(false);
-        try {
-            JSONArray profiles = new JSONObject(json).optJSONArray("profiles");
-            if (profiles == null) return result;
-            int limit = Math.min(profiles.length(), count);
-            for (int i = 0; i < limit; i++) {
-                result.set(i, profiles.getJSONObject(i).optBoolean("auto_connect", false));
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to parse auto_connect flags: " + e.getMessage());
-        }
-        return result;
     }
 
     private void createNotificationChannel() {

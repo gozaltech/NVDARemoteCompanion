@@ -86,6 +86,14 @@ public class NativeBridge {
 
     public static native void nativeLoadConfig(String configJson);
     public static native String nativeGetConfigJson();
+    public static native int nativeMergeConfig(String configJson);
+
+    public static native boolean nativeGetAutoConnect(int profileIndex);
+    public static native String nativeGetProfileJson(int profileIndex);
+    public static native void nativeSaveProfile(int profileIndex,
+            String name, String host, int port, String key,
+            boolean speech, boolean sounds, boolean mute, boolean autoConnect);
+    public static native void nativeDeleteProfile(int profileIndex);
 
     public static native void nativeSendKeyEvent(
             int vkCode,

@@ -142,10 +142,11 @@ public void deleteProfile(int index) {
                     while ((line = br.readLine()) != null) sb.append(line).append('\n');
                 }
                 String json = sb.toString();
-                new JSONObject(json);
-                NativeBridge.nativeLoadConfig(json);
+                new JSONObject(json); // validate JSON before passing to native
+                int added = NativeBridge.nativeMergeConfig(json);
+                NativeBridge.syncConnectionStates();
                 refreshProfiles();
-                postToast(R.string.import_success);
+                postToast(added > 0 ? R.string.import_success : R.string.import_no_new_profiles);
             } catch (Exception e) {
                 postToast(R.string.import_failed);
             }

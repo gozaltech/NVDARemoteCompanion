@@ -18,6 +18,8 @@
 #include "Debug.h"
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <nlohmann/json.hpp>
 
 #define TAG "NVDARemote/Bridge"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  TAG, __VA_ARGS__)
@@ -283,6 +285,38 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetProfileName
     return env->NewStringUTF(g_config.profiles[idx].name.c_str());
 }
 
+JNIEXPORT jint JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeMergeConfig(
+        JNIEnv* env, jobject,
+        jstring configJson) {
+
+    const char* chars = env->GetStringUTFChars(configJson, nullptr);
+    std::string jsonStr(chars);
+    env->ReleaseStringUTFChars(configJson, chars);
+
+    ConfigFileData imported = ConfigFile::LoadFromString(jsonStr);
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int added = 0;
+    for (const auto& incoming : imported.profiles) {
+        if (incoming.host.empty() || incoming.key.empty()) continue;
+        bool exists = std::any_of(g_config.profiles.begin(), g_config.profiles.end(),
+            [&](const ProfileConfig& existing) {
+                return existing.host == incoming.host && existing.key == incoming.key;
+            });
+        if (!exists) {
+            g_config.profiles.push_back(incoming);
+            ++added;
+        }
+    }
+    if (added > 0) {
+        ConfigFile::Save(g_configPath, g_config);
+        g_managers.resize(g_config.profiles.size());
+        LOGI("Merged config — added %d profile(s)", added);
+    }
+    return static_cast<jint>(added);
+}
+
 JNIEXPORT void JNICALL
 Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeLoadConfig(
         JNIEnv* env, jobject,
@@ -309,6 +343,101 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetConfigJson(
     std::string content((std::istreambuf_iterator<char>(in)),
                          std::istreambuf_iterator<char>());
     return env->NewStringUTF(content.c_str());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetAutoConnect(
+        JNIEnv*, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (idx < 0 || idx >= static_cast<int>(g_config.profiles.size())) return JNI_FALSE;
+    return g_config.profiles[idx].autoConnect ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jstring JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetProfileJson(
+        JNIEnv* env, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (idx < 0 || idx >= static_cast<int>(g_config.profiles.size()))
+        return env->NewStringUTF("{}");
+
+    const ProfileConfig& p = g_config.profiles[idx];
+    nlohmann::ordered_json j;
+    j[ProfileFields::NAME]                  = p.name;
+    j[ProfileFields::HOST]                  = p.host;
+    j[ProfileFields::PORT]                  = p.port;
+    j[ProfileFields::KEY]                   = p.key;
+    j[ProfileFields::SHORTCUT]              = p.shortcut;
+    j[ProfileFields::AUTO_CONNECT]          = p.autoConnect;
+    j[ProfileFields::SPEECH]                = p.speech;
+    j[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
+    j[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
+    return env->NewStringUTF(j.dump().c_str());
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSaveProfile(
+        JNIEnv* env, jobject,
+        jint profileIndex,
+        jstring name, jstring host, jint port, jstring key,
+        jboolean speech, jboolean sounds, jboolean mute, jboolean autoConnect) {
+
+    auto jstr = [&](jstring s) -> std::string {
+        const char* c = env->GetStringUTFChars(s, nullptr);
+        std::string r(c);
+        env->ReleaseStringUTFChars(s, c);
+        return r;
+    };
+
+    ProfileConfig p;
+    p.host              = jstr(host);
+    p.key               = jstr(key);
+    if (p.host.empty() || p.key.empty()) return;
+    std::string nameStr = jstr(name);
+    p.name              = nameStr.empty() ? p.host : nameStr;
+    p.port              = static_cast<int>(port);
+    p.speech            = static_cast<bool>(speech);
+    p.forwardAudio      = static_cast<bool>(sounds);
+    p.muteOnLocalControl = static_cast<bool>(mute);
+    p.autoConnect       = static_cast<bool>(autoConnect);
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+
+    g_config.profiles.erase(
+        std::remove_if(g_config.profiles.begin(), g_config.profiles.end(),
+            [](const ProfileConfig& x) { return x.host.empty() || x.key.empty(); }),
+        g_config.profiles.end());
+
+    int idx = static_cast<int>(profileIndex);
+    if (idx >= 0 && idx < static_cast<int>(g_config.profiles.size())) {
+        g_config.profiles[idx] = std::move(p);
+    } else {
+        g_config.profiles.push_back(std::move(p));
+    }
+
+    ConfigFile::Save(g_configPath, g_config);
+    g_managers.resize(g_config.profiles.size());
+    LOGI("Profile saved — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeDeleteProfile(
+        JNIEnv*, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (idx < 0 || idx >= static_cast<int>(g_config.profiles.size())) return;
+
+    g_config.profiles.erase(g_config.profiles.begin() + idx);
+    ConfigFile::Save(g_configPath, g_config);
+    g_managers.resize(g_config.profiles.size());
+    LOGI("Profile deleted — %d profile(s)", static_cast<int>(g_config.profiles.size()));
 }
 
 JNIEXPORT void JNICALL

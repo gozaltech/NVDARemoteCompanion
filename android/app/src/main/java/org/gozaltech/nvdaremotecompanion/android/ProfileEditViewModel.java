@@ -4,7 +4,6 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.concurrent.ExecutorService;
@@ -30,9 +29,7 @@ public class ProfileEditViewModel extends ViewModel {
     public void loadProfile(int index) {
         executor.submit(() -> {
             try {
-                JSONArray profiles = ProfileRepository.getProfiles();
-                if (index >= profiles.length()) return;
-                JSONObject p = profiles.getJSONObject(index);
+                JSONObject p = ProfileRepository.getProfile(index);
                 formDataLive.postValue(new ProfileFormData(
                         p.optString("name"),
                         p.optString("host"),
@@ -61,9 +58,8 @@ public class ProfileEditViewModel extends ViewModel {
         int finalPort = port;
         executor.submit(() -> {
             try {
-                JSONObject profile = ProfileRepository.buildProfileJson(
-                        name, host, finalPort, key, speech, sounds, mute, autoConnect);
-                ProfileRepository.saveProfile(profileIndex, profile);
+                ProfileRepository.saveProfile(profileIndex, name, host, finalPort, key,
+                        speech, sounds, mute, autoConnect);
                 toastLive.postValue(new Event<>(R.string.profile_saved));
                 finishLive.postValue(new Event<>(null));
             } catch (Exception e) {
@@ -74,13 +70,9 @@ public class ProfileEditViewModel extends ViewModel {
 
     public void delete(int profileIndex) {
         executor.submit(() -> {
-            try {
-                ProfileRepository.deleteProfile(profileIndex);
-                toastLive.postValue(new Event<>(R.string.profile_deleted));
-                finishLive.postValue(new Event<>(null));
-            } catch (Exception e) {
-                toastLive.postValue(new Event<>(R.string.error_saving_profile));
-            }
+            ProfileRepository.deleteProfile(profileIndex);
+            toastLive.postValue(new Event<>(R.string.profile_deleted));
+            finishLive.postValue(new Event<>(null));
         });
     }
 }

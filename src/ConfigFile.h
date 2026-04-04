@@ -51,6 +51,7 @@ namespace ConfigFile {
     std::string FindConfigFile(const std::string& explicitPath = "");
     bool Migrate(const std::string& path);
     ConfigFileData Load(const std::string& path);
+    ConfigFileData LoadFromString(const std::string& jsonStr);
     bool CreateDefault(const std::string& path);
     bool Save(const std::string& path, const ConfigFileData& data);
 
