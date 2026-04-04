@@ -58,6 +58,8 @@ void AppState::ToggleForwarding() {
     if (g_forwardingKeys) {
         ReleaseAllKeys();
         g_forwardingKeys = false;
+        Audio::PlayTone(440, 100);
+        Speech::Speak("Local", true);
     } else {
         g_forwardingKeys = true;
         AnnounceProfile(g_activeProfile);

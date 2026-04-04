@@ -111,6 +111,10 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             Clipboard::SetText(text);
             if (self.ShouldPlaySpeech()) Speech::Speak("Clipboard received", false);
         }},
+        {Config::MSG_TYPE_NVDA_NOT_CONNECTED, [](ConnectionManager& self, const json&) {
+            DEBUG_INFO("CONN", "Remote NVDA is not connected");
+            if (self.ShouldPlaySpeech()) Speech::Speak("Remote NVDA is not connected", true);
+        }},
     };
 
     auto messageType = j.value("type", "");
