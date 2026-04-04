@@ -14,6 +14,8 @@ public final class AppPrefs {
     public static final String TTS_PITCH            = "tts_pitch";
     public static final String TTS_RATE             = "tts_rate";
     public static final String TTS_VOLUME           = "tts_volume";
+    public static final String SPEECH_OUTPUT_MODE   = "speech_output_mode";
+    public static final String DIRECT_TTS_ENGINE    = "direct_tts_engine";
 
     private AppPrefs() {}
 
@@ -29,6 +31,18 @@ public final class AppPrefs {
     public static float   getTtsPitch(Context ctx)             { return get(ctx).getFloat(TTS_PITCH, 1.0f); }
     public static float   getTtsRate(Context ctx)              { return get(ctx).getFloat(TTS_RATE, 1.0f); }
     public static float   getTtsVolume(Context ctx)            { return get(ctx).getFloat(TTS_VOLUME, 1.0f); }
+    public static String  getDirectTtsEngine(Context ctx)      { return get(ctx).getString(DIRECT_TTS_ENGINE, "ru_tts"); }
+
+    /** Returns speech output mode (0=Android TTS, 1=Screen Reader, 2=Direct TTS).
+     *  Migrates from legacy SCREEN_READER_MODE boolean on first access. */
+    public static int getSpeechOutputMode(Context ctx) {
+        SharedPreferences prefs = get(ctx);
+        if (prefs.contains(SPEECH_OUTPUT_MODE)) {
+            return prefs.getInt(SPEECH_OUTPUT_MODE, 0);
+        }
+        boolean sr = prefs.getBoolean(SCREEN_READER_MODE, false);
+        return sr ? 1 : 0;
+    }
 
     public static void setTtsEngine(Context ctx, String pkg)           { get(ctx).edit().putString(TTS_ENGINE, pkg).apply(); }
     public static void setAutoConnect(Context ctx, boolean v)          { get(ctx).edit().putBoolean(AUTO_CONNECT, v).apply(); }
@@ -38,4 +52,6 @@ public final class AppPrefs {
     public static void setTtsPitch(Context ctx, float v)               { get(ctx).edit().putFloat(TTS_PITCH, v).apply(); }
     public static void setTtsRate(Context ctx, float v)                { get(ctx).edit().putFloat(TTS_RATE, v).apply(); }
     public static void setTtsVolume(Context ctx, float v)              { get(ctx).edit().putFloat(TTS_VOLUME, v).apply(); }
+    public static void setSpeechOutputMode(Context ctx, int mode)      { get(ctx).edit().putInt(SPEECH_OUTPUT_MODE, mode).apply(); }
+    public static void setDirectTtsEngine(Context ctx, String engine)  { get(ctx).edit().putString(DIRECT_TTS_ENGINE, engine).apply(); }
 }

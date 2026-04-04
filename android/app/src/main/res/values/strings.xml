@@ -68,6 +68,8 @@
     <string name="speech_output_header">Speech output</string>
     <string name="speech_mode_tts">Text-to-speech</string>
     <string name="speech_mode_screen_reader">Screen Reader</string>
+    <string name="speech_mode_direct_tts">Direct TTS (Experimental)</string>
+    <string name="direct_tts_engine_label">Engine:</string>
     <string name="tts_pitch">Pitch</string>
     <string name="tts_rate">Rate</string>
     <string name="tts_volume">Volume</string>

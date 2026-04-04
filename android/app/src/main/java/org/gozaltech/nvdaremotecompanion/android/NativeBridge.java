@@ -114,6 +114,9 @@ public class NativeBridge {
 
     public static native void nativeSendClipboardText(String text, int profileIndex);
 
+    public static native void nativeSetSpeechOutputMode(int mode);
+    public static native void nativeSetDirectTtsEngine(String engine);
+
     @Keep
     public static void onForwardingStateChanged(@SuppressWarnings("unused") boolean forwarding) {
         Map<Integer, Boolean> snapshot = Collections.unmodifiableMap(new HashMap<>(connectionStates));

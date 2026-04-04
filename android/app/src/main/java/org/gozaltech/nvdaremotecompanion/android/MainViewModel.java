@@ -83,6 +83,16 @@ public class MainViewModel extends AndroidViewModel {
         else AppPrefs.setScreenReaderMode(getApplication(), use);
     }
 
+    public void setSpeechOutputMode(int mode) {
+        AppPrefs.setSpeechOutputMode(getApplication(), mode);
+        if (connectionService != null) connectionService.setSpeechOutputMode(mode);
+    }
+
+    public void setDirectTtsEngine(String engine) {
+        AppPrefs.setDirectTtsEngine(getApplication(), engine);
+        withService(s -> s.setDirectTtsEngine(engine));
+    }
+
     public void setUseAccessibilityStream(boolean use) {
         if (connectionService != null) connectionService.setUseAccessibilityStream(use);
         else AppPrefs.setAccessibilityStream(getApplication(), use);
@@ -128,7 +138,7 @@ public class MainViewModel extends AndroidViewModel {
                     while ((line = br.readLine()) != null) sb.append(line).append('\n');
                 }
                 String json = sb.toString();
-                new JSONObject(json); // validate JSON before passing to native
+                new JSONObject(json);
                 int added = NativeBridge.nativeMergeConfig(json);
                 NativeBridge.syncConnectionStates();
                 refreshProfiles();

@@ -95,6 +95,7 @@ public class ConnectionService extends Service {
 
         NativeBridge.setAppContext(this);
         NativeBridge.nativeInit(ttsManager, audioManager, getFilesDir().getAbsolutePath());
+        applyStoredSpeechMode();
         initialized = true;
         Log.i(TAG, "ConnectionService created, native initialized");
 
@@ -203,6 +204,23 @@ public class ConnectionService extends Service {
     public void setTtsVolume(float value) {
         ttsManager.setVolume(value);
         AppPrefs.setTtsVolume(this, value);
+    }
+
+    public void setSpeechOutputMode(int mode) {
+        setScreenReaderMode(mode == 1);
+        NativeBridge.nativeSetSpeechOutputMode(mode == 2 ? 1 : 0);
+    }
+
+    public void setDirectTtsEngine(String engine) {
+        NativeBridge.nativeSetDirectTtsEngine(engine);
+    }
+
+    private void applyStoredSpeechMode() {
+        int mode = AppPrefs.getSpeechOutputMode(this);
+        setSpeechOutputMode(mode);
+        if (mode == 2) {
+            NativeBridge.nativeSetDirectTtsEngine(AppPrefs.getDirectTtsEngine(this));
+        }
     }
 
     public void deleteProfile(int profileIndex) {

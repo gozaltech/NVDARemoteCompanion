@@ -64,6 +64,8 @@
     <string name="speech_output_header">Вывод речи</string>
     <string name="speech_mode_tts">Синтез речи</string>
     <string name="speech_mode_screen_reader">Программа экранного доступа</string>
+    <string name="speech_mode_direct_tts">Прямой синтез речи (Экспериментально)</string>
+    <string name="direct_tts_engine_label">Движок:</string>
     <string name="tts_pitch">Высота тона</string>
     <string name="tts_rate">Скорость</string>
     <string name="tts_volume">Громкость</string>

@@ -17,6 +17,9 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -117,10 +120,10 @@ class SettingsTab {
         ViewCompat.setAccessibilityHeading(header, true);
         section.addView(header);
 
-        boolean isScreenReaderMode = AppPrefs.getScreenReaderMode(activity);
+        int currentMode = AppPrefs.getSpeechOutputMode(activity);
 
         RadioGroup modeGroup = new RadioGroup(activity);
-        modeGroup.setOrientation(RadioGroup.HORIZONTAL);
+        modeGroup.setOrientation(RadioGroup.VERTICAL);
 
         RadioButton rbTts = new RadioButton(activity);
         rbTts.setText(R.string.speech_mode_tts);
@@ -130,14 +133,23 @@ class SettingsTab {
         rbSr.setText(R.string.speech_mode_screen_reader);
         rbSr.setId(View.generateViewId());
 
+        RadioButton rbDirect = new RadioButton(activity);
+        rbDirect.setText(R.string.speech_mode_direct_tts);
+        rbDirect.setId(View.generateViewId());
+
         modeGroup.addView(rbTts);
         modeGroup.addView(rbSr);
-        modeGroup.check(isScreenReaderMode ? rbSr.getId() : rbTts.getId());
+        modeGroup.addView(rbDirect);
+
+        int checkedId = currentMode == 1 ? rbSr.getId()
+                      : currentMode == 2 ? rbDirect.getId()
+                      : rbTts.getId();
+        modeGroup.check(checkedId);
         section.addView(modeGroup);
 
         LinearLayout ttsOptions = new LinearLayout(activity);
         ttsOptions.setOrientation(LinearLayout.VERTICAL);
-        ttsOptions.setVisibility(isScreenReaderMode ? View.GONE : View.VISIBLE);
+        ttsOptions.setVisibility(currentMode == 0 ? View.VISIBLE : View.GONE);
 
         Button ttsEngineBtn = new Button(activity);
         ttsEngineBtn.setText(R.string.tts_engine);
@@ -156,12 +168,10 @@ class SettingsTab {
                 activity.getString(R.string.tts_pitch),
                 AppPrefs.getTtsPitch(activity), 0.5f, 2.0f,
                 viewModel::setTtsPitch));
-
         ttsOptions.addView(buildSlider(
                 activity.getString(R.string.tts_rate),
                 AppPrefs.getTtsRate(activity), 0.5f, 2.0f,
                 viewModel::setTtsRate));
-
         ttsOptions.addView(buildSlider(
                 activity.getString(R.string.tts_volume),
                 AppPrefs.getTtsVolume(activity), 0.0f, 1.0f,
@@ -169,13 +179,57 @@ class SettingsTab {
 
         section.addView(ttsOptions);
 
-        modeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            boolean sr = checkedId == rbSr.getId();
-            viewModel.setScreenReaderMode(sr);
-            ttsOptions.setVisibility(sr ? View.GONE : View.VISIBLE);
+        LinearLayout directOptions = new LinearLayout(activity);
+        directOptions.setOrientation(LinearLayout.VERTICAL);
+        directOptions.setVisibility(currentMode == 2 ? View.VISIBLE : View.GONE);
+        directOptions.addView(buildDirectEngineSpinner());
+        section.addView(directOptions);
+
+        modeGroup.setOnCheckedChangeListener((group, id) -> {
+            int mode = id == rbSr.getId() ? 1 : id == rbDirect.getId() ? 2 : 0;
+            viewModel.setSpeechOutputMode(mode);
+            ttsOptions.setVisibility(mode == 0 ? View.VISIBLE : View.GONE);
+            directOptions.setVisibility(mode == 2 ? View.VISIBLE : View.GONE);
         });
 
         return section;
+    }
+
+    private View buildDirectEngineSpinner() {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, 8, 0, 0);
+
+        TextView label = new TextView(activity);
+        label.setText(R.string.direct_tts_engine_label);
+        label.setPadding(0, 0, 16, 0);
+        row.addView(label);
+
+        String[] engines = { "ru_tts" };
+        String current = AppPrefs.getDirectTtsEngine(activity);
+
+        Spinner spinner = new Spinner(activity);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                activity, android.R.layout.simple_spinner_item, engines);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+
+        int sel = 0;
+        for (int i = 0; i < engines.length; i++) {
+            if (engines[i].equals(current)) { sel = i; break; }
+        }
+        spinner.setSelection(sel);
+
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                viewModel.setDirectTtsEngine(engines[pos]);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        row.addView(spinner);
+        return row;
     }
 
     private View buildSlider(String label, float current, float min, float max,

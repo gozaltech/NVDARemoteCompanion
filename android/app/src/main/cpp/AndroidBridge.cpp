@@ -539,4 +539,19 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSendClipboardT
     MessageSender::SendClipboardText(clipText);
     LOGI("Clipboard text sent from Android");
 }
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetSpeechOutputMode(
+        JNIEnv*, jobject,
+        jint mode) {
+    AndroidSpeech::SetOutputMode(static_cast<int>(mode));
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetDirectTtsEngine(
+        JNIEnv* env, jobject,
+        jstring engine) {
+    AndroidSpeech::SetDirectEngine(JniToString(env, engine));
+}
+
 }

@@ -1,6 +1,8 @@
 #include "AndroidSpeech.h"
+#include "DirectTts/RuTtsEngine.h"
 #include "Speech.h"
 #include <android/log.h>
+#include <memory>
 #include <string>
 
 #define TAG "NVDARemote/Speech"
@@ -9,24 +11,26 @@
 bool Speech::s_initialized = false;
 bool Speech::s_enabled = true;
 
-static JavaVM*  s_jvm       = nullptr;
-static jobject  s_ttsRef    = nullptr;
-static jmethodID s_speak    = nullptr;
-static jmethodID s_stop     = nullptr;
+static JavaVM*   s_jvm    = nullptr;
+static jobject   s_ttsRef = nullptr;
+static jmethodID s_speak  = nullptr;
+static jmethodID s_stop   = nullptr;
 
-static JNIEnv* GetEnv(bool& didAttach) {
-    didAttach = false;
+static JNIEnv* GetEnv() {
     if (!s_jvm) return nullptr;
     JNIEnv* env = nullptr;
-    jint result = s_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
-    if (result == JNI_EDETACHED) {
-        if (s_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
-            didAttach = true;
-        } else {
-            return nullptr;
-        }
-    }
+    if (s_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK)
+        return env;
+    s_jvm->AttachCurrentThreadAsDaemon(&env, nullptr);
     return env;
+}
+
+static int s_outputMode = 0;
+static std::unique_ptr<DirectTtsEngine> s_directEngine;
+
+static void EnsureDirectEngine(const std::string& name) {
+    if (s_directEngine) return;
+    s_directEngine = std::make_unique<RuTtsEngine>();
 }
 
 void AndroidSpeech::Initialize(JNIEnv* env, jobject ttsManagerRef) {
@@ -38,14 +42,14 @@ void AndroidSpeech::Initialize(JNIEnv* env, jobject ttsManagerRef) {
     s_stop  = env->GetMethodID(cls, "stop",  "()V");
     env->DeleteLocalRef(cls);
 
-    if (!s_speak || !s_stop) {
-        LOGE("Failed to find TtsManager methods — check Kotlin method signatures");
-    }
+    if (!s_speak || !s_stop)
+        LOGE("Failed to find TtsManager methods");
 
     Speech::Initialize();
 }
 
 void AndroidSpeech::Cleanup(JNIEnv* env) {
+    s_directEngine.reset();
     if (s_ttsRef) {
         env->DeleteGlobalRef(s_ttsRef);
         s_ttsRef = nullptr;
@@ -53,6 +57,16 @@ void AndroidSpeech::Cleanup(JNIEnv* env) {
     s_speak = nullptr;
     s_stop  = nullptr;
     Speech::Cleanup();
+}
+
+void AndroidSpeech::SetOutputMode(int mode) {
+    s_outputMode = mode;
+    if (mode == 1) EnsureDirectEngine("ru_tts");
+}
+
+void AndroidSpeech::SetDirectEngine(const std::string& engineName) {
+    s_directEngine.reset();
+    if (s_outputMode == 1) EnsureDirectEngine(engineName);
 }
 
 bool Speech::Initialize() {
@@ -66,17 +80,19 @@ void Speech::Cleanup() {
 
 void Speech::Speak(std::string_view text, bool interrupt) {
     if (!s_initialized || !s_enabled || text.empty()) return;
-    if (!s_ttsRef || !s_speak) return;
 
-    bool didAttach = false;
-    JNIEnv* env = GetEnv(didAttach);
+    if (s_outputMode == 1 && s_directEngine) {
+        s_directEngine->speak(text, interrupt);
+        return;
+    }
+
+    if (!s_ttsRef || !s_speak) return;
+    JNIEnv* env = GetEnv();
     if (!env) return;
 
     jstring jtext = env->NewStringUTF(std::string(text).c_str());
     env->CallVoidMethod(s_ttsRef, s_speak, jtext, static_cast<jboolean>(interrupt));
     env->DeleteLocalRef(jtext);
-
-    if (didAttach) s_jvm->DetachCurrentThread();
 }
 
 void Speech::SpeakSsml(std::string_view ssml, bool interrupt) {
@@ -84,13 +100,16 @@ void Speech::SpeakSsml(std::string_view ssml, bool interrupt) {
 }
 
 void Speech::Stop() {
-    if (!s_initialized || !s_ttsRef || !s_stop) return;
+    if (!s_initialized) return;
 
-    bool didAttach = false;
-    JNIEnv* env = GetEnv(didAttach);
+    if (s_outputMode == 1 && s_directEngine) {
+        s_directEngine->stop();
+        return;
+    }
+
+    if (!s_ttsRef || !s_stop) return;
+    JNIEnv* env = GetEnv();
     if (!env) return;
 
     env->CallVoidMethod(s_ttsRef, s_stop);
-
-    if (didAttach) s_jvm->DetachCurrentThread();
 }
