@@ -4,6 +4,7 @@
 #include "EventChecker.h"
 #include "KeyEvent.h"
 #include "MessageSender.h"
+#include "Speech.h"
 #include "Debug.h"
 
 extern DWORD g_mainThreadId;
@@ -86,8 +87,10 @@ void KeyboardHook::Reinstall() {
     Uninstall();
     if (Install()) {
         DEBUG_INFO("HOOK", "Keyboard hook reinstalled successfully");
+        Speech::Speak("Hook reinstalled", false);
     } else {
         DEBUG_ERROR("HOOK", "Failed to reinstall keyboard hook");
+        Speech::Speak("Hook reinstall failed", false);
     }
 }
 
