@@ -35,7 +35,7 @@ bool KeyboardHandler::HandleShortcut(uint32_t vkCode) {
         OnClipboardShortcut();
         return true;
     }
-if (KeyboardState::CheckReconnectShortcut(vkCode)) {
+    if (KeyboardState::CheckReconnectShortcut(vkCode)) {
         KeyboardState::ResetModifiers();
         if (m_reconnectCallback) m_reconnectCallback();
         return true;

@@ -99,6 +99,20 @@ std::string ConfigFile::FindConfigFile(const std::string& explicitPath) {
     return "";
 }
 
+static nlohmann::ordered_json SerializeProfile(const ProfileConfig& p) {
+    nlohmann::ordered_json j;
+    j[ProfileFields::NAME]                  = p.name;
+    j[ProfileFields::HOST]                  = p.host;
+    j[ProfileFields::PORT]                  = p.port;
+    j[ProfileFields::KEY]                   = p.key;
+    j[ProfileFields::SHORTCUT]              = p.shortcut;
+    j[ProfileFields::AUTO_CONNECT]          = p.autoConnect;
+    j[ProfileFields::SPEECH]               = p.speech;
+    j[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
+    j[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
+    return j;
+}
+
 static ProfileConfig ParseProfile(const nlohmann::json& j) {
     ProfileConfig p;
     ReadJson(j, ProfileFields::NAME,                 p.name);
@@ -251,7 +265,7 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"audio",          true},
         {"shortcuts", nlohmann::ordered_json({
             {"cycle",          Config::DEFAULT_CYCLE_SHORTCUT},
-{"exit",           ""},
+            {"exit",           ""},
             {"reinstall_hook", ""},
             {"reconnect",      ""},
             {"clipboard",      ""},
@@ -279,7 +293,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         sc["cycle"] = data.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
         if (data.exitShortcut)           sc["exit"]           = *data.exitShortcut;
         if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
-if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
+        if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
         if (data.clipboardShortcut)      sc["clipboard"]      = *data.clipboardShortcut;
         sc["forward_keys"] = data.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
         j["shortcuts"] = std::move(sc);
@@ -287,17 +301,7 @@ if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {
-        nlohmann::ordered_json pj;
-        pj[ProfileFields::NAME]                 = p.name;
-        pj[ProfileFields::HOST]                 = p.host;
-        pj[ProfileFields::PORT]                 = p.port;
-        pj[ProfileFields::KEY]                  = p.key;
-        pj[ProfileFields::SHORTCUT]             = p.shortcut;
-        pj[ProfileFields::AUTO_CONNECT]         = p.autoConnect;
-        pj[ProfileFields::SPEECH]               = p.speech;
-        pj[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
-        pj[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
-        profilesArr.push_back(std::move(pj));
+        profilesArr.push_back(SerializeProfile(p));
     }
     j["profiles"] = std::move(profilesArr);
 
@@ -312,4 +316,15 @@ if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
 
     file << j.dump(4) << std::endl;
     return file.good();
+}
+
+void ConfigFile::StripInvalidProfiles(std::vector<ProfileConfig>& profiles) {
+    profiles.erase(
+        std::remove_if(profiles.begin(), profiles.end(),
+            [](const ProfileConfig& p) { return p.host.empty() || p.key.empty(); }),
+        profiles.end());
+}
+
+std::string ConfigFile::ProfileToJsonString(const ProfileConfig& p) {
+    return SerializeProfile(p).dump();
 }

@@ -148,9 +148,7 @@ bool CommandHandler::HasDisconnectedSessions() const {
 
 bool CommandHandler::ConnectFromParams(const ProfileConfig& p) {
     auto cm = std::make_unique<ConnectionManager>();
-    cm->SetSpeechEnabled(p.speech);
-    cm->SetMuteOnLocalControl(p.muteOnLocalControl);
-    cm->SetForwardAudioEnabled(p.forwardAudio);
+    cm->ApplyProfileConfig(p);
     if (m_disconnectCallback) cm->SetDisconnectCallback(m_disconnectCallback);
     if (m_reconnectCallback) cm->SetReconnectCallback(m_reconnectCallback);
 
@@ -222,9 +220,7 @@ void CommandHandler::ConnectSession(int index) {
     std::cout << "Connecting to " << p.name << " (" << p.host << ":" << p.port << ")..." << std::endl;
 
     session.connection = std::make_unique<ConnectionManager>();
-    session.connection->SetSpeechEnabled(p.speech);
-    session.connection->SetMuteOnLocalControl(p.muteOnLocalControl);
-    session.connection->SetForwardAudioEnabled(p.forwardAudio);
+    session.connection->ApplyProfileConfig(p);
     if (m_disconnectCallback) {
         session.connection->SetDisconnectCallback(m_disconnectCallback);
     }
@@ -512,10 +508,7 @@ static bool PromptProfileInteractive(
 
 bool CommandHandler::AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg,
                                            ProfileConfig partial) {
-    cfg.profiles.erase(
-        std::remove_if(cfg.profiles.begin(), cfg.profiles.end(),
-            [](const ProfileConfig& p) { return p.host.empty() || p.key.empty(); }),
-        cfg.profiles.end());
+    ConfigFile::StripInvalidProfiles(cfg.profiles);
 
     ProfileConfig p = partial;
 

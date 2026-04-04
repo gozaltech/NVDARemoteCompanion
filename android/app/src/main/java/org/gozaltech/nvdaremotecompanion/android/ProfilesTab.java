@@ -124,7 +124,7 @@ class ProfilesTab {
         connectBtn.setText(p.connected ? R.string.disconnect : R.string.connect);
         connectBtn.setOnClickListener(v -> {
             if (p.connected) viewModel.disconnect(p.index);
-            else viewModel.connect(p.index, p.displayName);
+            else viewModel.connect(p.index);
         });
         buttonRow.addView(connectBtn);
 
@@ -158,7 +158,7 @@ class ProfilesTab {
         } else {
             ViewCompat.addAccessibilityAction(card,
                     activity.getString(R.string.connect_profile, p.displayName),
-                    (v, a) -> { viewModel.connect(p.index, p.displayName); return true; });
+                    (v, a) -> { viewModel.connect(p.index); return true; });
         }
         ViewCompat.addAccessibilityAction(card,
                 activity.getString(R.string.edit_profile, p.displayName),

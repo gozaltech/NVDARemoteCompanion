@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include "ConfigFile.h"
 
 #ifdef _WIN32
     #include <windows.h>
@@ -123,7 +124,7 @@ private:
     static ShortcutConfig g_cycleShortcut;
     static ShortcutConfig g_exitShortcut;
     static ShortcutConfig g_reinstallHookShortcut;
-static ShortcutConfig g_reconnectShortcut;
+    static ShortcutConfig g_reconnectShortcut;
     static ShortcutConfig g_clipboardShortcut;
     static ShortcutConfig g_forwardKeysShortcut;
 
@@ -145,7 +146,7 @@ public:
     static void SetReinstallHookShortcut(const std::string& shortcut);
     static bool CheckExitShortcut(NativeKeyType vkCode);
     static bool CheckReinstallHookShortcut(NativeKeyType vkCode);
-static void SetReconnectShortcut(const std::string& shortcut);
+    static void SetReconnectShortcut(const std::string& shortcut);
     static bool CheckReconnectShortcut(NativeKeyType vkCode);
     static void SetClipboardShortcut(const std::string& shortcut);
     static bool CheckClipboardShortcut(NativeKeyType vkCode);
@@ -166,4 +167,5 @@ static void SetReconnectShortcut(const std::string& shortcut);
 
     static void ClearShortcuts();
     static ShortcutConfig ParseShortcutString(const std::string& shortcut);
+    static void ApplyGlobalShortcuts(const ConfigFileData& cfg);
 };

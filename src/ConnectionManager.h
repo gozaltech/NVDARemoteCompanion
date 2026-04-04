@@ -1,4 +1,5 @@
 #pragma once
+#include "ConfigFile.h"
 #include "NetworkClient.h"
 #include <string>
 #include <string_view>
@@ -58,4 +59,9 @@ public:
     void SetMuteOnLocalControl(bool enabled) { m_muteOnLocalControl = enabled; }
     void SetForwardAudioEnabled(bool enabled) { m_forwardAudio = enabled; }
     void SetProfileIndex(int index) { m_profileIndex = index; }
+    void ApplyProfileConfig(const ProfileConfig& p) {
+        SetSpeechEnabled(p.speech);
+        SetMuteOnLocalControl(p.muteOnLocalControl);
+        SetForwardAudioEnabled(p.forwardAudio);
+    }
 };

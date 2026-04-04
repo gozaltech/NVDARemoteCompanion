@@ -3,6 +3,7 @@ package org.gozaltech.nvdaremotecompanion.android;
 import android.app.Application;
 import android.content.ContentResolver;
 import android.net.Uri;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
@@ -16,11 +17,13 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 import java.util.concurrent.Executors;
 
 public class MainViewModel extends AndroidViewModel {
+
+    private static final String TAG = "NVDARemote/ViewModel";
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -59,7 +62,7 @@ public class MainViewModel extends AndroidViewModel {
         connectionService = null;
     }
 
-    public void connect(int index, String displayName) {
+    public void connect(int index) {
         if (connectionService == null) {
             postToast(R.string.error_connect_failed_generic);
             return;
@@ -69,25 +72,11 @@ public class MainViewModel extends AndroidViewModel {
         });
     }
 
-    public void disconnect(int index) {
-        if (connectionService != null) connectionService.disconnect(index);
-    }
-
-    public void setActiveProfile(int index) {
-        if (connectionService != null) connectionService.setActiveProfile(index);
-    }
-
-    public void toggleForwarding() {
-        if (connectionService != null) connectionService.toggleForwarding();
-    }
-
-public void deleteProfile(int index) {
-        if (connectionService != null) connectionService.deleteProfile(index);
-    }
-
-    public void setTtsEngine(String enginePackage) {
-        if (connectionService != null) connectionService.setTtsEngine(enginePackage);
-    }
+    public void disconnect(int index)          { withService(s -> s.disconnect(index)); }
+    public void setActiveProfile(int index)    { withService(s -> s.setActiveProfile(index)); }
+    public void toggleForwarding()             { withService(ConnectionService::toggleForwarding); }
+    public void deleteProfile(int index)       { withService(s -> s.deleteProfile(index)); }
+    public void setTtsEngine(String pkg)       { withService(s -> s.setTtsEngine(pkg)); }
 
     public void setScreenReaderMode(boolean use) {
         if (connectionService != null) connectionService.setScreenReaderMode(use);
@@ -95,11 +84,8 @@ public void deleteProfile(int index) {
     }
 
     public void setUseAccessibilityStream(boolean use) {
-        if (connectionService != null) {
-            connectionService.setUseAccessibilityStream(use);
-        } else {
-            AppPrefs.setAccessibilityStream(getApplication(), use);
-        }
+        if (connectionService != null) connectionService.setUseAccessibilityStream(use);
+        else AppPrefs.setAccessibilityStream(getApplication(), use);
     }
 
     public void setTtsPitch(float value) {
@@ -126,6 +112,7 @@ public void deleteProfile(int index) {
                 }
                 postToast(R.string.export_success);
             } catch (Exception e) {
+                Log.e(TAG, "Export failed", e);
                 postToast(R.string.export_failed);
             }
         });
@@ -147,6 +134,7 @@ public void deleteProfile(int index) {
                 refreshProfiles();
                 postToast(added > 0 ? R.string.import_success : R.string.import_no_new_profiles);
             } catch (Exception e) {
+                Log.e(TAG, "Import failed", e);
                 postToast(R.string.import_failed);
             }
         });
@@ -178,6 +166,10 @@ public void deleteProfile(int index) {
             status = getApplication().getString(R.string.status_local);
         }
         statusLive.postValue(status);
+    }
+
+    private void withService(java.util.function.Consumer<ConnectionService> action) {
+        if (connectionService != null) action.accept(connectionService);
     }
 
     private void postToast(int resId) {

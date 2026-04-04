@@ -16,7 +16,7 @@ private:
 public:
     static bool IsSendingKeys();
     static void SetActiveProfile(int profileIndex);
-static void ToggleForwarding();
+    static void ToggleForwarding();
     static void CycleProfile();
     static void SetConnectedProfiles(const std::vector<int>& indices, const std::vector<std::string>& names);
     static bool IsReleasingKeys();

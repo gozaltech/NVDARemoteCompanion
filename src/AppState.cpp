@@ -1,11 +1,11 @@
 #include "AppState.h"
-#include "KeyboardState.h"
-#include <algorithm>
-#include "MessageSender.h"
-#include "KeyEvent.h"
 #include "Audio.h"
-#include "Speech.h"
 #include "Config.h"
+#include "KeyEvent.h"
+#include "KeyboardState.h"
+#include "MessageSender.h"
+#include "Speech.h"
+#include <algorithm>
 
 int AppState::g_activeProfile = -1;
 bool AppState::g_forwardingKeys = false;
@@ -17,13 +17,10 @@ bool AppState::IsSendingKeys() {
     return g_forwardingKeys && g_activeProfile >= 0;
 }
 
-
 void AppState::ReleaseAllKeys() {
     g_releasingKeys = true;
-    auto pressedKeys = KeyboardState::GetAllPressedKeys();
-    for (const auto& key : pressedKeys) {
-        KeyEvent keyEvent(key.vkCode, false, key.scanCode, key.extended);
-        MessageSender::SendKeyEvent(keyEvent);
+    for (const auto& key : KeyboardState::GetAllPressedKeys()) {
+        MessageSender::SendKeyEvent(KeyEvent(key.vkCode, false, key.scanCode, key.extended));
     }
     KeyboardState::ClearPressedKeys();
     g_releasingKeys = false;
@@ -76,12 +73,10 @@ void AppState::CycleProfile() {
     }
 
     int currentIdx = -1;
-    if (g_activeProfile >= 0) {
-        for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
-            if (g_connectedProfiles[i] == g_activeProfile) {
-                currentIdx = i;
-                break;
-            }
+    for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
+        if (g_connectedProfiles[i] == g_activeProfile) {
+            currentIdx = i;
+            break;
         }
     }
 
@@ -117,4 +112,3 @@ bool AppState::IsReleasingKeys() {
 int AppState::GetActiveProfile() {
     return g_activeProfile;
 }
-

@@ -115,9 +115,10 @@ public class NativeBridge {
     public static native void nativeSendClipboardText(String text, int profileIndex);
 
     @Keep
-    public static void onForwardingStateChanged(boolean forwarding) {
+    public static void onForwardingStateChanged(@SuppressWarnings("unused") boolean forwarding) {
+        Map<Integer, Boolean> snapshot = Collections.unmodifiableMap(new HashMap<>(connectionStates));
         for (ConnectionStateListener l : listeners) {
-            l.onConnectionStatesChanged(Collections.unmodifiableMap(new HashMap<>(connectionStates)));
+            l.onConnectionStatesChanged(snapshot);
         }
     }
 

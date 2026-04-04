@@ -520,27 +520,15 @@ int main(int argc, char* argv[]) {
 
     CommandHandler cmdHandler(configPath, cfg);
 
-    {
-        std::string cycleSc = args.cycleShortcut;
-        if (cycleSc.empty() && cfg.cycleShortcut) cycleSc = *cfg.cycleShortcut;
-        if (cycleSc.empty()) cycleSc = Config::DEFAULT_CYCLE_SHORTCUT;
-        KeyboardState::SetCycleShortcut(cycleSc);
-
-        if (cfg.exitShortcut && !cfg.exitShortcut->empty())
-            KeyboardState::SetExitShortcut(*cfg.exitShortcut);
-if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
-            KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
-        if (cfg.clipboardShortcut && !cfg.clipboardShortcut->empty())
-            KeyboardState::SetClipboardShortcut(*cfg.clipboardShortcut);
-        {
-            std::string fwSc = cfg.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
-            if (!fwSc.empty()) KeyboardState::SetForwardKeysShortcut(fwSc);
-        }
+    KeyboardState::ApplyGlobalShortcuts(cfg);
+    if (!args.cycleShortcut.empty())
+        KeyboardState::SetCycleShortcut(args.cycleShortcut);
+    if (cfg.exitShortcut && !cfg.exitShortcut->empty())
+        KeyboardState::SetExitShortcut(*cfg.exitShortcut);
 #ifdef _WIN32
-        if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
-            KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
+    if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
+        KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);
 #endif
-    }
 
 #ifdef _WIN32
     auto keyboard = std::make_unique<KeyboardHook>();

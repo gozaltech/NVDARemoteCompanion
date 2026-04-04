@@ -1,5 +1,7 @@
 package org.gozaltech.nvdaremotecompanion.android;
 
+import android.util.Log;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
@@ -10,6 +12,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ProfileEditViewModel extends ViewModel {
+
+    private static final String TAG = "NVDARemote/ProfileEdit";
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -41,6 +45,7 @@ public class ProfileEditViewModel extends ViewModel {
                         p.optBoolean("auto_connect", true)
                 ));
             } catch (Exception e) {
+                Log.e(TAG, "Failed to load profile " + index, e);
                 toastLive.postValue(new Event<>(R.string.error_loading_profile));
             }
         });
@@ -63,6 +68,7 @@ public class ProfileEditViewModel extends ViewModel {
                 toastLive.postValue(new Event<>(R.string.profile_saved));
                 finishLive.postValue(new Event<>(null));
             } catch (Exception e) {
+                Log.e(TAG, "Failed to save profile " + profileIndex, e);
                 toastLive.postValue(new Event<>(R.string.error_saving_profile));
             }
         });

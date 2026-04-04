@@ -34,7 +34,7 @@ struct ConfigFileData {
     std::optional<std::string> cycleShortcut;
     std::optional<std::string> exitShortcut;
     std::optional<std::string> reinstallHookShortcut;
-std::optional<std::string> reconnectShortcut;
+    std::optional<std::string> reconnectShortcut;
     std::optional<std::string> clipboardShortcut;
     std::optional<std::string> forwardKeysShortcut;
 
@@ -54,6 +54,8 @@ namespace ConfigFile {
     ConfigFileData LoadFromString(const std::string& jsonStr);
     bool CreateDefault(const std::string& path);
     bool Save(const std::string& path, const ConfigFileData& data);
+    void StripInvalidProfiles(std::vector<ProfileConfig>& profiles);
+    std::string ProfileToJsonString(const ProfileConfig& p);
 
 #ifdef __ANDROID__
     void SetAndroidDataDir(const std::string& dir);

@@ -266,3 +266,16 @@ const std::vector<PressedKey>& KeyboardState::GetAllPressedKeys() {
 void KeyboardState::ClearPressedKeys() {
     g_pressedKeyDetails.clear();
 }
+
+void KeyboardState::ApplyGlobalShortcuts(const ConfigFileData& cfg) {
+    std::string cycleSc = cfg.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
+    SetCycleShortcut(cycleSc);
+
+    if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+        SetReconnectShortcut(*cfg.reconnectShortcut);
+    if (cfg.clipboardShortcut && !cfg.clipboardShortcut->empty())
+        SetClipboardShortcut(*cfg.clipboardShortcut);
+
+    std::string fwSc = cfg.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
+    if (!fwSc.empty()) SetForwardKeysShortcut(fwSc);
+}

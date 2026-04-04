@@ -19,10 +19,8 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -90,15 +88,8 @@ public class ConnectionService extends Service {
         super.onCreate();
         createNotificationChannel();
 
-        String enginePkg = AppPrefs.getTtsEngine(this);
-        ttsManager = new TtsManager(getApplicationContext(), enginePkg);
-        ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
-        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
-        ttsManager.setRate(AppPrefs.getTtsRate(this));
-        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
         audioManager = new NvdaAudioManager(getApplicationContext());
-
-        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
+        ttsManager = createConfiguredTtsManager(AppPrefs.getTtsEngine(this));
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NVDARemote:connection");
 
@@ -174,14 +165,19 @@ public class ConnectionService extends Service {
 
     public void setTtsEngine(String enginePackage) {
         ttsManager.shutdown();
-        ttsManager = new TtsManager(getApplicationContext(), enginePackage);
-        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
-        ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
-        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
-        ttsManager.setRate(AppPrefs.getTtsRate(this));
-        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
+        ttsManager = createConfiguredTtsManager(enginePackage);
         NativeBridge.nativeUpdateTtsManager(ttsManager);
         AppPrefs.setTtsEngine(this, enginePackage);
+    }
+
+    private TtsManager createConfiguredTtsManager(String enginePackage) {
+        TtsManager mgr = new TtsManager(getApplicationContext(), enginePackage);
+        mgr.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
+        mgr.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
+        mgr.setPitch(AppPrefs.getTtsPitch(this));
+        mgr.setRate(AppPrefs.getTtsRate(this));
+        mgr.setVolume(AppPrefs.getTtsVolume(this));
+        return mgr;
     }
 
     public void setUseAccessibilityStream(boolean use) {
@@ -213,11 +209,7 @@ public class ConnectionService extends Service {
         desiredConnected.remove(profileIndex);
         executor.submit(() -> {
             if (NativeBridge.nativeIsConnected(profileIndex)) NativeBridge.nativeDisconnect(profileIndex);
-            try {
-                ProfileRepository.deleteProfile(profileIndex);
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to delete profile " + profileIndex + ": " + e.getMessage());
-            }
+            ProfileRepository.deleteProfile(profileIndex);
         });
     }
 
