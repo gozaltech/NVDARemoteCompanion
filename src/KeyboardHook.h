@@ -17,6 +17,7 @@ public:
 protected:
     void OnExit() override;
     void OnReinstallHook() override;
+    void OnClipboardShortcut() override;
 
 private:
     static HHOOK s_hook;

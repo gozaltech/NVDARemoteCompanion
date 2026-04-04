@@ -5,6 +5,8 @@
 #include "AppState.h"
 #include "KeyEvent.h"
 #include "MessageSender.h"
+#include "Clipboard.h"
+#include "Speech.h"
 #include "Debug.h"
 
 #include <linux/input.h>
@@ -390,6 +392,16 @@ void LinuxKeyboardGrab::OnExit() {
         char b = 'q';
         write(g_wakeupPipe[1], &b, 1);
     }
+}
+
+void LinuxKeyboardGrab::OnClipboardShortcut() {
+    std::string text = Clipboard::GetText();
+    if (text.empty()) {
+        Speech::Speak("Clipboard is empty", false);
+        return;
+    }
+    MessageSender::SendClipboardText(text);
+    Speech::Speak("Clipboard sent", false);
 }
 
 bool LinuxKeyboardGrab::Install() {

@@ -20,8 +20,9 @@ std::vector<ShortcutConfig> KeyboardState::g_shortcuts;
 ShortcutConfig KeyboardState::g_cycleShortcut;
 ShortcutConfig KeyboardState::g_exitShortcut;
 ShortcutConfig KeyboardState::g_reinstallHookShortcut;
-ShortcutConfig KeyboardState::g_localShortcut;
 ShortcutConfig KeyboardState::g_reconnectShortcut;
+ShortcutConfig KeyboardState::g_clipboardShortcut;
+ShortcutConfig KeyboardState::g_forwardKeysShortcut;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
 bool KeyboardState::IsControlKey(NativeKeyType vkCode) {
@@ -54,11 +55,43 @@ static bool MatchesShortcut(const ShortcutConfig& sc, NativeKeyType vkCode,
     return (ctrl == sc.ctrl) && (win == sc.win) && (alt == sc.alt) && (shift == sc.shift);
 }
 
+static std::string ShortcutToString(const ShortcutConfig& sc) {
+    std::string result;
+    if (sc.ctrl)  result += "Ctrl+";
+    if (sc.win)   result += "Win+";
+    if (sc.alt)   result += "Alt+";
+    if (sc.shift) result += "Shift+";
+
+    if (sc.key >= VK_F1 && sc.key <= VK_F24) {
+        result += "F" + std::to_string(sc.key - VK_F1 + 1);
+    } else {
+        static std::unordered_map<NativeKeyType, std::string> nameMap = {
+            {VK_SPACE, "Space"}, {VK_RETURN, "Enter"}, {VK_ESCAPE, "Escape"},
+            {VK_TAB, "Tab"}, {VK_UP, "Up"}, {VK_DOWN, "Down"},
+            {VK_LEFT, "Left"}, {VK_RIGHT, "Right"}, {VK_HOME, "Home"},
+            {VK_END, "End"}, {VK_PRIOR, "PageUp"}, {VK_NEXT, "PageDown"},
+            {VK_INSERT, "Insert"}, {VK_DELETE, "Delete"}, {VK_BACK, "Backspace"},
+            {VK_PAUSE, "Pause"}, {VK_SNAPSHOT, "PrintScreen"},
+            {VK_CAPITAL, "CapsLock"}, {VK_NUMLOCK, "NumLock"}
+        };
+        auto it = nameMap.find(sc.key);
+        if (it != nameMap.end()) {
+            result += it->second;
+        } else if (sc.key >= 'A' && sc.key <= 'Z') {
+            result += static_cast<char>(sc.key);
+        } else if (sc.key >= '0' && sc.key <= '9') {
+            result += static_cast<char>(sc.key);
+        } else {
+            result += "0x" + [&]{ std::ostringstream o; o << std::hex << sc.key; return o.str(); }();
+        }
+    }
+    return result;
+}
+
 void KeyboardState::ApplyGlobalShortcut(ShortcutConfig& sc, const std::string& shortcut, const char* name) {
     sc = ParseShortcutString(shortcut);
     if (sc.key != 0) {
-        DEBUG_INFO_F("KEYS", "{} shortcut set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
-                     name, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
+        DEBUG_INFO_F("KEYS", "{} shortcut set to: {}", name, ShortcutToString(sc));
     }
 }
 
@@ -93,8 +126,7 @@ void KeyboardState::SetToggleShortcutAt(int index, const std::string& shortcut) 
         g_shortcuts.push_back({});
     }
     g_shortcuts[index] = sc;
-    DEBUG_INFO_F("KEYS", "Shortcut[{}] set to: Ctrl={} Win={} Alt={} Shift={} Key={}",
-                 index, sc.ctrl, sc.win, sc.alt, sc.shift, sc.key);
+    DEBUG_INFO_F("KEYS", "Shortcut[{}] set to: {}", index, ShortcutToString(sc));
 }
 
 void KeyboardState::SetCycleShortcut(const std::string& shortcut) {
@@ -121,20 +153,28 @@ bool KeyboardState::CheckReinstallHookShortcut(NativeKeyType vkCode) {
     return CheckGlobalShortcut(g_reinstallHookShortcut, vkCode);
 }
 
-void KeyboardState::SetLocalShortcut(const std::string& shortcut) {
-    ApplyGlobalShortcut(g_localShortcut, shortcut, "Local");
-}
-
-bool KeyboardState::CheckLocalShortcut(NativeKeyType vkCode) {
-    return CheckGlobalShortcut(g_localShortcut, vkCode);
-}
-
 void KeyboardState::SetReconnectShortcut(const std::string& shortcut) {
     ApplyGlobalShortcut(g_reconnectShortcut, shortcut, "Reconnect");
 }
 
 bool KeyboardState::CheckReconnectShortcut(NativeKeyType vkCode) {
     return CheckGlobalShortcut(g_reconnectShortcut, vkCode);
+}
+
+void KeyboardState::SetClipboardShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_clipboardShortcut, shortcut, "Clipboard");
+}
+
+bool KeyboardState::CheckClipboardShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_clipboardShortcut, vkCode);
+}
+
+void KeyboardState::SetForwardKeysShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_forwardKeysShortcut, shortcut, "Forward keys");
+}
+
+bool KeyboardState::CheckForwardKeysShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_forwardKeysShortcut, vkCode);
 }
 
 static NativeKeyType ParseKey(const std::string& keyName) {
@@ -225,4 +265,17 @@ const std::vector<PressedKey>& KeyboardState::GetAllPressedKeys() {
 
 void KeyboardState::ClearPressedKeys() {
     g_pressedKeyDetails.clear();
+}
+
+void KeyboardState::ApplyGlobalShortcuts(const ConfigFileData& cfg) {
+    std::string cycleSc = cfg.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
+    SetCycleShortcut(cycleSc);
+
+    if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+        SetReconnectShortcut(*cfg.reconnectShortcut);
+    if (cfg.clipboardShortcut && !cfg.clipboardShortcut->empty())
+        SetClipboardShortcut(*cfg.clipboardShortcut);
+
+    std::string fwSc = cfg.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
+    if (!fwSc.empty()) SetForwardKeysShortcut(fwSc);
 }

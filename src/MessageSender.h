@@ -15,4 +15,5 @@ public:
     static void SetNetworkClient(int index, std::shared_ptr<NetworkClient> client);
     static void SetActiveProfile(int index);
     static void SendKeyEvent(const KeyEvent& keyEvent);
+    static void SendClipboardText(const std::string& text);
 };

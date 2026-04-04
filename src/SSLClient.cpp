@@ -122,7 +122,6 @@ void SSLClient::Disconnect() {
     DEBUG_VERBOSE("SSL", "Cleaning up SSL resources");
     CleanupSSL();
 
-    // Re-initialize contexts so this SSLClient can be reused for reconnection
     mbedtls_net_init(&m_net_ctx);
     mbedtls_ssl_init(&m_ssl_ctx);
     mbedtls_ssl_config_init(&m_ssl_conf);

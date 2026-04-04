@@ -5,7 +5,15 @@
 #include <algorithm>
 
 namespace Config {
-    
+
+#if defined(_WIN32) || defined(__ANDROID__)
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT       = "ctrl+alt+f11";
+    constexpr const char* DEFAULT_FORWARD_KEYS_SHORTCUT = "ctrl+alt+f12";
+#else
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT       = "ctrl+shift+f11";
+    constexpr const char* DEFAULT_FORWARD_KEYS_SHORTCUT = "ctrl+shift+f12";
+#endif
+
     constexpr int DEFAULT_PORT = 6837;
     constexpr int MIN_PORT = 1;
     constexpr int MAX_PORT = 65535;
@@ -39,6 +47,8 @@ namespace Config {
     constexpr const char* MSG_TYPE_KEY = "key";
     constexpr const char* MSG_TYPE_TONE = "tone";
     constexpr const char* MSG_TYPE_WAVE = "wave";
+    constexpr const char* MSG_TYPE_SET_CLIPBOARD_TEXT = "set_clipboard_text";
+    constexpr const char* MSG_TYPE_NVDA_NOT_CONNECTED = "nvda_not_connected";
     
     constexpr const char* ERROR_PREFIX = "Error: ";
     constexpr const char* ERROR_HOST_EMPTY = "Host cannot be empty. Please enter a valid hostname or IP address.";

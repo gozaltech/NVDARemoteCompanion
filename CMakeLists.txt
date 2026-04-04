@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.25)
 project(NVDARemoteCompanion VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -85,6 +85,7 @@ set(COMMON_SOURCES
     src/Debug.cpp
     src/Speech.cpp
     src/Audio.cpp
+    src/Clipboard.cpp
     src/ConfigFile.cpp
     src/CommandHandler.cpp
     src/Input.cpp

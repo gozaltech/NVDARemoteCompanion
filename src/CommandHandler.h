@@ -14,6 +14,7 @@ struct ProfileSession {
     ProfileConfig config;
     std::unique_ptr<ConnectionManager> connection;
     int shortcutIndex = -1;
+    bool unsaved = false;
 };
 
 class CommandHandler {
@@ -22,7 +23,11 @@ public:
 
     int ConnectAutoProfiles();
     bool ConnectInteractive();
+    bool ConnectFromParams(const ProfileConfig& p);
     void RunCommandLoop();
+
+    static bool AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg,
+                                      ProfileConfig partial = {});
 
     const std::vector<ProfileSession>& GetSessions() const { return m_sessions; }
     int GetSessionCount() const { return Config::isize(m_sessions); }
@@ -48,12 +53,15 @@ private:
     void CmdEdit(const std::string& args);
     void CmdDelete(const std::string& args);
     void CmdHelp();
+    void CmdSave(const std::string& args);
+    void CmdClip();
     void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);
     bool PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue = "");
     bool IsValidSessionIndex(int index) const { return index >= 0 && index < Config::isize(m_sessions); }
 
+    void AppendProfile(const ProfileConfig& p);
     void SaveConfig();
     void ConnectSession(int index);
     void DisconnectSession(int index);

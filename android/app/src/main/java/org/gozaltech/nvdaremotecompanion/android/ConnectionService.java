@@ -19,13 +19,8 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -93,18 +88,12 @@ public class ConnectionService extends Service {
         super.onCreate();
         createNotificationChannel();
 
-        String enginePkg = AppPrefs.getTtsEngine(this);
-        ttsManager = new TtsManager(getApplicationContext(), enginePkg);
-        ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
-        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
-        ttsManager.setRate(AppPrefs.getTtsRate(this));
-        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
         audioManager = new NvdaAudioManager(getApplicationContext());
-
-        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
+        ttsManager = createConfiguredTtsManager(AppPrefs.getTtsEngine(this));
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NVDARemote:connection");
 
+        NativeBridge.setAppContext(this);
         NativeBridge.nativeInit(ttsManager, audioManager, getFilesDir().getAbsolutePath());
         initialized = true;
         Log.i(TAG, "ConnectionService created, native initialized");
@@ -168,7 +157,7 @@ public class ConnectionService extends Service {
     }
 
     public void setActiveProfile(int profileIndex) { NativeBridge.nativeSetActiveProfile(profileIndex); }
-    public void goLocal()                          { NativeBridge.nativeSetActiveProfile(-1); }
+    public void toggleForwarding()                 { NativeBridge.nativeToggleForwarding(); }
     public boolean isConnected(int profileIndex)   { return NativeBridge.nativeIsConnected(profileIndex); }
     public int getProfileCount()                   { return NativeBridge.nativeGetProfileCount(); }
     public String getProfileName(int profileIndex) { return NativeBridge.nativeGetProfileName(profileIndex); }
@@ -176,14 +165,19 @@ public class ConnectionService extends Service {
 
     public void setTtsEngine(String enginePackage) {
         ttsManager.shutdown();
-        ttsManager = new TtsManager(getApplicationContext(), enginePackage);
-        ttsManager.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
-        ttsManager.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
-        ttsManager.setPitch(AppPrefs.getTtsPitch(this));
-        ttsManager.setRate(AppPrefs.getTtsRate(this));
-        ttsManager.setVolume(AppPrefs.getTtsVolume(this));
+        ttsManager = createConfiguredTtsManager(enginePackage);
         NativeBridge.nativeUpdateTtsManager(ttsManager);
         AppPrefs.setTtsEngine(this, enginePackage);
+    }
+
+    private TtsManager createConfiguredTtsManager(String enginePackage) {
+        TtsManager mgr = new TtsManager(getApplicationContext(), enginePackage);
+        mgr.setScreenReaderMode(AppPrefs.getScreenReaderMode(this));
+        mgr.setUseAccessibilityStream(AppPrefs.getAccessibilityStream(this));
+        mgr.setPitch(AppPrefs.getTtsPitch(this));
+        mgr.setRate(AppPrefs.getTtsRate(this));
+        mgr.setVolume(AppPrefs.getTtsVolume(this));
+        return mgr;
     }
 
     public void setUseAccessibilityStream(boolean use) {
@@ -215,11 +209,7 @@ public class ConnectionService extends Service {
         desiredConnected.remove(profileIndex);
         executor.submit(() -> {
             if (NativeBridge.nativeIsConnected(profileIndex)) NativeBridge.nativeDisconnect(profileIndex);
-            try {
-                ProfileRepository.deleteProfile(profileIndex);
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to delete profile " + profileIndex + ": " + e.getMessage());
-            }
+            ProfileRepository.deleteProfile(profileIndex);
         });
     }
 
@@ -227,31 +217,14 @@ public class ConnectionService extends Service {
         if (!AppPrefs.getAutoConnect(this)) return;
         executor.submit(() -> {
             int count = NativeBridge.nativeGetProfileCount();
-            List<Boolean> autoFlags = parseAutoConnect(NativeBridge.nativeGetConfigJson(), count);
             for (int i = 0; i < count; i++) {
-                if (autoFlags.get(i)) {
+                if (NativeBridge.nativeGetAutoConnect(i)) {
                     Log.i(TAG, "Auto-connecting profile " + i);
                     desiredConnected.add(i);
                     NativeBridge.nativeConnect(i);
                 }
             }
         });
-    }
-
-    private List<Boolean> parseAutoConnect(String json, int count) {
-        List<Boolean> result = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) result.add(false);
-        try {
-            JSONArray profiles = new JSONObject(json).optJSONArray("profiles");
-            if (profiles == null) return result;
-            int limit = Math.min(profiles.length(), count);
-            for (int i = 0; i < limit; i++) {
-                result.set(i, profiles.getJSONObject(i).optBoolean("auto_connect", false));
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to parse auto_connect flags: " + e.getMessage());
-        }
-        return result;
     }
 
     private void createNotificationChannel() {

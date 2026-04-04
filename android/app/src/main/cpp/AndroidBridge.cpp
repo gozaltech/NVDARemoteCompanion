@@ -1,21 +1,23 @@
 #include <jni.h>
 #include <android/log.h>
-#include <vector>
+#include <algorithm>
+#include <fstream>
 #include <memory>
-#include <string>
 #include <mutex>
-
-#include "AndroidSpeech.h"
+#include <sstream>
+#include <string>
+#include <vector>
 #include "AndroidAudio.h"
+#include "AndroidClipboard.h"
+#include "AndroidSpeech.h"
+#include "AppState.h"
+#include "Clipboard.h"
 #include "ConfigFile.h"
 #include "ConnectionManager.h"
-#include "MessageSender.h"
-#include "AppState.h"
+#include "Debug.h"
 #include "KeyEvent.h"
 #include "KeyboardState.h"
-#include "Debug.h"
-#include <fstream>
-#include <sstream>
+#include "MessageSender.h"
 
 #define TAG "NVDARemote/Bridge"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  TAG, __VA_ARGS__)
@@ -28,8 +30,10 @@ static ConfigFileData g_config;
 static std::string g_configPath;
 static std::mutex g_managersMutex;
 
-static jclass    g_bridgeClass        = nullptr;
-static jmethodID g_onConnStateChanged = nullptr;
+static jclass    g_bridgeClass         = nullptr;
+static jmethodID g_onConnStateChanged  = nullptr;
+static jmethodID g_onForwardingChanged = nullptr;
+static jmethodID g_onClipShortcut     = nullptr;
 
 static JNIEnv* GetEnv(bool& didAttach) {
     didAttach = false;
@@ -37,13 +41,33 @@ static JNIEnv* GetEnv(bool& didAttach) {
     JNIEnv* env = nullptr;
     jint res = g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
     if (res == JNI_EDETACHED) {
-        if (g_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+        if (g_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK)
             didAttach = true;
-        } else {
+        else
             return nullptr;
-        }
     }
     return env;
+}
+
+static std::string JniToString(JNIEnv* env, jstring s) {
+    const char* c = env->GetStringUTFChars(s, nullptr);
+    std::string r(c);
+    env->ReleaseStringUTFChars(s, c);
+    return r;
+}
+
+static bool IsValidProfileIdx(int idx) {
+    return idx >= 0 && idx < static_cast<int>(g_config.profiles.size());
+}
+
+void NotifyForwardingState(bool forwarding) {
+    if (!g_bridgeClass || !g_onForwardingChanged) return;
+    bool didAttach = false;
+    JNIEnv* env = GetEnv(didAttach);
+    if (!env) return;
+    env->CallStaticVoidMethod(g_bridgeClass, g_onForwardingChanged,
+                              static_cast<jboolean>(forwarding));
+    if (didAttach) g_jvm->DetachCurrentThread();
 }
 
 static void NotifyConnectionState(int profileIndex, bool connected) {
@@ -67,6 +91,21 @@ static void SyncConnectedProfiles() {
         }
     }
     AppState::SetConnectedProfiles(indices, names);
+}
+
+static void ApplyShortcutsFromConfig() {
+    KeyboardState::ClearShortcuts();
+    KeyboardState::ApplyGlobalShortcuts(g_config);
+
+    for (int i = 0; i < static_cast<int>(g_config.profiles.size()); i++) {
+        if (!g_config.profiles[i].shortcut.empty())
+            KeyboardState::SetToggleShortcutAt(i, g_config.profiles[i].shortcut);
+    }
+}
+
+static void SaveAndResizeManagers() {
+    ConfigFile::Save(g_configPath, g_config);
+    g_managers.resize(g_config.profiles.size());
 }
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -101,10 +140,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
     AndroidSpeech::Initialize(env, ttsManager);
     AndroidAudio::Initialize(env, audioManager);
 
-    const char* dirChars = env->GetStringUTFChars(configDirPath, nullptr);
-    std::string configDir(dirChars);
-    env->ReleaseStringUTFChars(configDirPath, dirChars);
-
+    std::string configDir = JniToString(env, configDirPath);
     ConfigFile::SetAndroidDataDir(configDir);
     g_configPath = ConfigFile::DefaultPath();
     LOGI("Config path: %s", g_configPath.c_str());
@@ -127,32 +163,22 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
     if (localCls) {
         g_bridgeClass = reinterpret_cast<jclass>(env->NewGlobalRef(localCls));
         env->DeleteLocalRef(localCls);
-        g_onConnStateChanged = env->GetStaticMethodID(
-                g_bridgeClass, "onConnectionStateChanged", "(IZ)V");
-        if (!g_onConnStateChanged)
-            LOGE("onConnectionStateChanged method not found");
+
+        g_onConnStateChanged = env->GetStaticMethodID(g_bridgeClass, "onConnectionStateChanged", "(IZ)V");
+        if (!g_onConnStateChanged) LOGE("onConnectionStateChanged method not found");
+
+        g_onForwardingChanged = env->GetStaticMethodID(g_bridgeClass, "onForwardingStateChanged", "(Z)V");
+        if (!g_onForwardingChanged) LOGE("onForwardingStateChanged method not found");
+
+        g_onClipShortcut = env->GetStaticMethodID(g_bridgeClass, "onClipboardShortcutTriggered", "()V");
+        if (!g_onClipShortcut) LOGE("onClipboardShortcutTriggered method not found");
+
+        AndroidClipboard::Initialize(env, g_bridgeClass);
     }
 
-    {
-        KeyboardState::ClearShortcuts();
+    ApplyShortcutsFromConfig();
 
-        std::string cycleSc = g_config.cycleShortcut.value_or("ctrl+alt+f11");
-        KeyboardState::SetCycleShortcut(cycleSc);
-
-        std::string localSc = g_config.localShortcut.value_or("");
-        if (!localSc.empty()) KeyboardState::SetLocalShortcut(localSc);
-
-        std::string reconnectSc = g_config.reconnectShortcut.value_or("");
-        if (!reconnectSc.empty()) KeyboardState::SetReconnectShortcut(reconnectSc);
-
-        for (int i = 0; i < static_cast<int>(g_config.profiles.size()); i++) {
-            if (!g_config.profiles[i].shortcut.empty())
-                KeyboardState::SetToggleShortcutAt(i, g_config.profiles[i].shortcut);
-        }
-    }
-
-    LOGI("nativeInit complete — %d profile(s) loaded",
-         static_cast<int>(g_config.profiles.size()));
+    LOGI("nativeInit complete — %d profile(s) loaded", static_cast<int>(g_config.profiles.size()));
 }
 
 JNIEXPORT void JNICALL
@@ -183,28 +209,25 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeConnect(
     std::unique_lock<std::mutex> lock(g_managersMutex);
 
     int idx = static_cast<int>(profileIndex);
-    if (idx < 0 || idx >= static_cast<int>(g_config.profiles.size())) {
+    if (!IsValidProfileIdx(idx)) {
         LOGE("nativeConnect: invalid profile index %d", idx);
         return JNI_FALSE;
     }
 
-    if (g_managers[idx] && g_managers[idx]->IsConnected()) {
-        return JNI_TRUE;
-    }
+    if (g_managers[idx] && g_managers[idx]->IsConnected()) return JNI_TRUE;
 
     if (g_managers[idx]) g_managers[idx]->SetDisconnectCallback(nullptr);
     g_managers[idx] = std::make_unique<ConnectionManager>();
 
     const auto& p = g_config.profiles[idx];
-    g_managers[idx]->SetSpeechEnabled(p.speech);
-    g_managers[idx]->SetMuteOnLocalControl(p.muteOnLocalControl);
-    g_managers[idx]->SetForwardAudioEnabled(p.forwardAudio);
+    g_managers[idx]->ApplyProfileConfig(p);
     g_managers[idx]->SetProfileIndex(idx);
 
     g_managers[idx]->SetDisconnectCallback([idx]() {
         LOGI("Profile %d disconnected", idx);
         SyncConnectedProfiles();
         NotifyConnectionState(idx, false);
+        NotifyForwardingState(AppState::IsSendingKeys());
     });
 
     g_managers[idx]->SetReconnectCallback([idx]() {
@@ -223,7 +246,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeConnect(
         LOGE("Profile %d failed to connect to %s", idx, p.host.c_str());
     }
     lock.unlock();
-    NotifyConnectionState(idx, static_cast<bool>(ok));
+    NotifyConnectionState(idx, ok);
 
     return ok ? JNI_TRUE : JNI_FALSE;
 }
@@ -233,19 +256,17 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeDisconnect(
         JNIEnv*, jobject,
         jint profileIndex) {
 
+    int idx = static_cast<int>(profileIndex);
     {
         std::lock_guard<std::mutex> lock(g_managersMutex);
-
-        int idx = static_cast<int>(profileIndex);
-        if (idx < 0 || idx >= static_cast<int>(g_managers.size())) return;
-        if (!g_managers[idx]) return;
-
+        if (idx < 0 || idx >= static_cast<int>(g_managers.size()) || !g_managers[idx]) return;
         g_managers[idx]->SetDisconnectCallback(nullptr);
         g_managers[idx]->Disconnect();
         SyncConnectedProfiles();
         LOGI("Profile %d disconnected by request", idx);
     }
-    NotifyConnectionState(static_cast<int>(profileIndex), false);
+    NotifyConnectionState(idx, false);
+    NotifyForwardingState(AppState::IsSendingKeys());
 }
 
 JNIEXPORT jboolean JNICALL
@@ -254,10 +275,8 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeIsConnected(
         jint profileIndex) {
 
     std::lock_guard<std::mutex> lock(g_managersMutex);
-
     int idx = static_cast<int>(profileIndex);
-    if (idx < 0 || idx >= static_cast<int>(g_managers.size())) return JNI_FALSE;
-    if (!g_managers[idx]) return JNI_FALSE;
+    if (idx < 0 || idx >= static_cast<int>(g_managers.size()) || !g_managers[idx]) return JNI_FALSE;
     return g_managers[idx]->IsConnected() ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -272,9 +291,103 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetProfileName
         JNIEnv* env, jobject,
         jint profileIndex) {
     int idx = static_cast<int>(profileIndex);
-    if (idx < 0 || idx >= static_cast<int>(g_config.profiles.size()))
-        return env->NewStringUTF("");
+    if (!IsValidProfileIdx(idx)) return env->NewStringUTF("");
     return env->NewStringUTF(g_config.profiles[idx].name.c_str());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetAutoConnect(
+        JNIEnv*, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (!IsValidProfileIdx(idx)) return JNI_FALSE;
+    return g_config.profiles[idx].autoConnect ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jstring JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetProfileJson(
+        JNIEnv* env, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (!IsValidProfileIdx(idx)) return env->NewStringUTF("{}");
+    return env->NewStringUTF(ConfigFile::ProfileToJsonString(g_config.profiles[idx]).c_str());
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSaveProfile(
+        JNIEnv* env, jobject,
+        jint profileIndex,
+        jstring name, jstring host, jint port, jstring key,
+        jboolean speech, jboolean sounds, jboolean mute, jboolean autoConnect) {
+
+    ProfileConfig p;
+    p.host = JniToString(env, host);
+    p.key  = JniToString(env, key);
+    if (p.host.empty() || p.key.empty()) return;
+    std::string nameStr = JniToString(env, name);
+    p.name             = nameStr.empty() ? p.host : nameStr;
+    p.port             = static_cast<int>(port);
+    p.speech           = static_cast<bool>(speech);
+    p.forwardAudio     = static_cast<bool>(sounds);
+    p.muteOnLocalControl = static_cast<bool>(mute);
+    p.autoConnect      = static_cast<bool>(autoConnect);
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    ConfigFile::StripInvalidProfiles(g_config.profiles);
+
+    int idx = static_cast<int>(profileIndex);
+    if (IsValidProfileIdx(idx))
+        g_config.profiles[idx] = std::move(p);
+    else
+        g_config.profiles.push_back(std::move(p));
+
+    SaveAndResizeManagers();
+    LOGI("Profile saved — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeDeleteProfile(
+        JNIEnv*, jobject,
+        jint profileIndex) {
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int idx = static_cast<int>(profileIndex);
+    if (!IsValidProfileIdx(idx)) return;
+
+    g_config.profiles.erase(g_config.profiles.begin() + idx);
+    SaveAndResizeManagers();
+    LOGI("Profile deleted — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+}
+
+JNIEXPORT jint JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeMergeConfig(
+        JNIEnv* env, jobject,
+        jstring configJson) {
+
+    ConfigFileData imported = ConfigFile::LoadFromString(JniToString(env, configJson));
+
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    int added = 0;
+    for (const auto& incoming : imported.profiles) {
+        if (incoming.host.empty() || incoming.key.empty()) continue;
+        bool exists = std::any_of(g_config.profiles.begin(), g_config.profiles.end(),
+            [&](const ProfileConfig& e) {
+                return e.host == incoming.host && e.key == incoming.key;
+            });
+        if (!exists) {
+            g_config.profiles.push_back(incoming);
+            ++added;
+        }
+    }
+    if (added > 0) {
+        SaveAndResizeManagers();
+        LOGI("Merged config — added %d profile(s)", added);
+    }
+    return static_cast<jint>(added);
 }
 
 JNIEXPORT void JNICALL
@@ -282,13 +395,11 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeLoadConfig(
         JNIEnv* env, jobject,
         jstring configJson) {
 
-    const char* chars = env->GetStringUTFChars(configJson, nullptr);
+    std::string json = JniToString(env, configJson);
     {
         std::ofstream out(g_configPath);
-        if (out.is_open()) out << chars;
+        if (out.is_open()) out << json;
     }
-    env->ReleaseStringUTFChars(configJson, chars);
-
     std::lock_guard<std::mutex> lock(g_managersMutex);
     g_config = ConfigFile::Load(g_configPath);
     g_managers.resize(g_config.profiles.size());
@@ -319,27 +430,10 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSendKeyEvent(
     bool     prs = static_cast<bool>(pressed);
     bool     ext = static_cast<bool>(extended);
 
-    if (prs) {
-        KeyboardState::TrackKeyPress(vk, sc, ext);
-    } else {
-        KeyboardState::TrackKeyRelease(vk);
-    }
+    if (prs) KeyboardState::TrackKeyPress(vk, sc, ext);
+    else     KeyboardState::TrackKeyRelease(vk);
 
-    KeyEvent event(vk, prs, sc, ext);
-    MessageSender::SendKeyEvent(event);
-}
-
-JNIEXPORT void JNICALL
-Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetActiveProfile(
-        JNIEnv*, jobject,
-        jint profileIndex) {
-
-    int idx = static_cast<int>(profileIndex);
-    if (idx == -1) {
-        AppState::GoLocal();
-    } else {
-        AppState::ToggleSendingKeys(idx);
-    }
+    MessageSender::SendKeyEvent(KeyEvent(vk, prs, sc, ext));
 }
 
 JNIEXPORT jboolean JNICALL
@@ -347,30 +441,79 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeProcessModifie
         JNIEnv*, jobject,
         jint vkCode, jboolean pressed) {
 
-    uint32_t vk = static_cast<uint32_t>(vkCode);
-    bool prs = static_cast<bool>(pressed);
+    uint32_t vk  = static_cast<uint32_t>(vkCode);
+    bool     prs = static_cast<bool>(pressed);
 
     KeyboardState::UpdateModifierState(vk, prs);
-
     if (!prs) return JNI_FALSE;
+
+    if (KeyboardState::CheckForwardKeysShortcut(vk)) {
+        KeyboardState::ResetModifiers();
+        AppState::ToggleForwarding();
+        NotifyForwardingState(AppState::IsSendingKeys());
+        return JNI_TRUE;
+    }
+
+    if (AppState::IsSendingKeys()) return JNI_FALSE;
 
     if (KeyboardState::CheckCycleShortcut(vk)) {
         KeyboardState::ResetModifiers();
         AppState::CycleProfile();
+        NotifyForwardingState(AppState::IsSendingKeys());
         return JNI_TRUE;
     }
-    if (KeyboardState::CheckLocalShortcut(vk)) {
-        KeyboardState::ResetModifiers();
-        AppState::GoLocal();
-        return JNI_TRUE;
-    }
+
     int toggleIdx = KeyboardState::CheckToggleShortcut(vk);
     if (toggleIdx >= 0) {
         KeyboardState::ResetModifiers();
-        AppState::ToggleSendingKeys(toggleIdx);
+        AppState::SetActiveProfile(toggleIdx);
+        NotifyForwardingState(AppState::IsSendingKeys());
         return JNI_TRUE;
     }
+
+    if (KeyboardState::CheckClipboardShortcut(vk)) {
+        KeyboardState::ResetModifiers();
+        if (g_bridgeClass && g_onClipShortcut) {
+            bool didAttach = false;
+            JNIEnv* cbEnv = GetEnv(didAttach);
+            if (cbEnv) {
+                cbEnv->CallStaticVoidMethod(g_bridgeClass, g_onClipShortcut);
+                if (didAttach) g_jvm->DetachCurrentThread();
+            }
+        }
+        return JNI_TRUE;
+    }
+
     return JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetActiveProfile(
+        JNIEnv*, jobject,
+        jint profileIndex) {
+
+    AppState::SetActiveProfile(static_cast<int>(profileIndex));
+    NotifyForwardingState(AppState::IsSendingKeys());
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeToggleForwarding(
+        JNIEnv*, jobject) {
+
+    AppState::ToggleForwarding();
+    NotifyForwardingState(AppState::IsSendingKeys());
+}
+
+JNIEXPORT jint JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetActiveProfile(
+        JNIEnv*, jobject) {
+    return static_cast<jint>(AppState::GetActiveProfile());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeIsSendingKeys(
+        JNIEnv*, jobject) {
+    return AppState::IsSendingKeys() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
@@ -381,10 +524,19 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeUpdateTtsManag
     AndroidSpeech::Initialize(env, ttsManager);
 }
 
-JNIEXPORT jint JNICALL
-Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetActiveProfile(
-        JNIEnv*, jobject) {
-    return static_cast<jint>(AppState::GetActiveProfile());
-}
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSendClipboardText(
+        JNIEnv* env, jobject,
+        jstring text,
+        jint profileIndex) {
 
+    int idx = static_cast<int>(profileIndex);
+    if (AppState::GetActiveProfile() != idx && idx != -1) return;
+
+    std::string clipText = JniToString(env, text);
+    if (clipText.empty()) return;
+
+    MessageSender::SendClipboardText(clipText);
+    LOGI("Clipboard text sent from Android");
+}
 }

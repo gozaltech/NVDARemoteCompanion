@@ -1,4 +1,5 @@
 #pragma once
+#include "ConfigFile.h"
 #include "NetworkClient.h"
 #include <string>
 #include <string_view>
@@ -23,7 +24,7 @@ private:
     ConnectionParams m_params;
     bool m_protocolHandshakeComplete;
     std::function<void()> m_disconnectCallback;
-    std::function<void()> m_reconnectCallback; // fired after a successful auto-reconnect
+    std::function<void()> m_reconnectCallback;
     bool m_speechEnabled = false;
     bool m_muteOnLocalControl = false;
     bool m_forwardAudio = true;
@@ -58,4 +59,9 @@ public:
     void SetMuteOnLocalControl(bool enabled) { m_muteOnLocalControl = enabled; }
     void SetForwardAudioEnabled(bool enabled) { m_forwardAudio = enabled; }
     void SetProfileIndex(int index) { m_profileIndex = index; }
+    void ApplyProfileConfig(const ProfileConfig& p) {
+        SetSpeechEnabled(p.speech);
+        SetMuteOnLocalControl(p.muteOnLocalControl);
+        SetForwardAudioEnabled(p.forwardAudio);
+    }
 };

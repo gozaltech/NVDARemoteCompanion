@@ -25,4 +25,5 @@ protected:
 
     virtual void OnExit() = 0;
     virtual void OnReinstallHook() {}
+    virtual void OnClipboardShortcut() {}
 };

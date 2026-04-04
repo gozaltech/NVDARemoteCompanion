@@ -1,5 +1,10 @@
 package org.gozaltech.nvdaremotecompanion.android;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.annotation.Keep;
 
 import java.util.Collections;
@@ -11,6 +16,12 @@ public class NativeBridge {
 
     static {
         System.loadLibrary("nvdaremote");
+    }
+
+    private static Context appContext;
+
+    public static void setAppContext(Context context) {
+        appContext = context.getApplicationContext();
     }
 
     public interface ConnectionStateListener {
@@ -75,6 +86,14 @@ public class NativeBridge {
 
     public static native void nativeLoadConfig(String configJson);
     public static native String nativeGetConfigJson();
+    public static native int nativeMergeConfig(String configJson);
+
+    public static native boolean nativeGetAutoConnect(int profileIndex);
+    public static native String nativeGetProfileJson(int profileIndex);
+    public static native void nativeSaveProfile(int profileIndex,
+            String name, String host, int port, String key,
+            boolean speech, boolean sounds, boolean mute, boolean autoConnect);
+    public static native void nativeDeleteProfile(int profileIndex);
 
     public static native void nativeSendKeyEvent(
             int vkCode,
@@ -90,4 +109,44 @@ public class NativeBridge {
 
     public static native void nativeSetActiveProfile(int profileIndex);
     public static native int nativeGetActiveProfile();
+    public static native boolean nativeIsSendingKeys();
+    public static native void nativeToggleForwarding();
+
+    public static native void nativeSendClipboardText(String text, int profileIndex);
+
+    @Keep
+    public static void onForwardingStateChanged(@SuppressWarnings("unused") boolean forwarding) {
+        Map<Integer, Boolean> snapshot = Collections.unmodifiableMap(new HashMap<>(connectionStates));
+        for (ConnectionStateListener l : listeners) {
+            l.onConnectionStatesChanged(snapshot);
+        }
+    }
+
+    @Keep
+    public static void onClipboardShortcutTriggered() {
+        if (appContext == null) return;
+        new Handler(Looper.getMainLooper()).post(() -> {
+            int activeProfile = nativeGetActiveProfile();
+            if (activeProfile < 0) return;
+            ClipboardManager clipboard = (ClipboardManager)
+                    appContext.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) return;
+            ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+            CharSequence text = item != null ? item.getText() : null;
+            if (text == null || text.length() == 0) return;
+            nativeSendClipboardText(text.toString(), activeProfile);
+        });
+    }
+
+    @Keep
+    public static void onClipboardTextReceived(final String text) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (appContext == null) return;
+            ClipboardManager clipboard = (ClipboardManager)
+                    appContext.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("NVDARemote", text));
+            }
+        });
+    }
 }

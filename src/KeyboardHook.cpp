@@ -4,6 +4,8 @@
 #include "EventChecker.h"
 #include "KeyEvent.h"
 #include "MessageSender.h"
+#include "Clipboard.h"
+#include "Speech.h"
 #include "Debug.h"
 
 extern DWORD g_mainThreadId;
@@ -19,6 +21,16 @@ void KeyboardHook::OnExit() {
 void KeyboardHook::OnReinstallHook() {
     if (g_mainThreadId != 0)
         PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
+}
+
+void KeyboardHook::OnClipboardShortcut() {
+    std::string text = Clipboard::GetText();
+    if (text.empty()) {
+        Speech::Speak("Clipboard is empty", false);
+        return;
+    }
+    MessageSender::SendClipboardText(text);
+    Speech::Speak("Clipboard sent", false);
 }
 
 LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode, bool isExtended) {
@@ -86,8 +98,10 @@ void KeyboardHook::Reinstall() {
     Uninstall();
     if (Install()) {
         DEBUG_INFO("HOOK", "Keyboard hook reinstalled successfully");
+        Speech::Speak("Hook reinstalled", false);
     } else {
         DEBUG_ERROR("HOOK", "Failed to reinstall keyboard hook");
+        Speech::Speak("Hook reinstall failed", false);
     }
 }
 

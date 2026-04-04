@@ -40,6 +40,7 @@ add_library(nvdaremote SHARED
     AndroidBridge.cpp
     AndroidSpeech.cpp
     AndroidAudio.cpp
+    AndroidClipboard.cpp
 
     ${SHARED_SRC}/NetworkClient.cpp
     ${SHARED_SRC}/SSLClient.cpp

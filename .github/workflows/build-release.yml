@@ -149,6 +149,28 @@ jobs:
       contents: write
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Generate release notes
+      id: notes
+      run: |
+        CURRENT_TAG="${GITHUB_REF_NAME}"
+        PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n1)
+        if [ -n "$PREV_TAG" ]; then
+          RANGE="${PREV_TAG}..${CURRENT_TAG}"
+        else
+          RANGE="${CURRENT_TAG}"
+        fi
+        NOTES=$(git log "$RANGE" --pretty=format:"- %s" --no-merges)
+        {
+          echo "body<<EOF"
+          echo "$NOTES"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Download Windows x64 artifacts
       uses: actions/download-artifact@v8
       with:
@@ -189,7 +211,7 @@ jobs:
       with:
         draft: false
         prerelease: false
-        generate_release_notes: true
+        body: ${{ steps.notes.outputs.body }}
         files: |
           nvda_remote_companion-windows-x64*.zip
           nvda_remote_companion-linux-x64*.tar.gz

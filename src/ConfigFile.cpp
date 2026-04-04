@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 
+
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
@@ -98,6 +99,20 @@ std::string ConfigFile::FindConfigFile(const std::string& explicitPath) {
     return "";
 }
 
+static nlohmann::ordered_json SerializeProfile(const ProfileConfig& p) {
+    nlohmann::ordered_json j;
+    j[ProfileFields::NAME]                  = p.name;
+    j[ProfileFields::HOST]                  = p.host;
+    j[ProfileFields::PORT]                  = p.port;
+    j[ProfileFields::KEY]                   = p.key;
+    j[ProfileFields::SHORTCUT]              = p.shortcut;
+    j[ProfileFields::AUTO_CONNECT]          = p.autoConnect;
+    j[ProfileFields::SPEECH]               = p.speech;
+    j[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
+    j[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
+    return j;
+}
+
 static ProfileConfig ParseProfile(const nlohmann::json& j) {
     ProfileConfig p;
     ReadJson(j, ProfileFields::NAME,                 p.name);
@@ -154,61 +169,73 @@ bool ConfigFile::Migrate(const std::string& path) {
     return true;
 }
 
-ConfigFileData ConfigFile::Load(const std::string& path) {
+static ConfigFileData ParseConfigJson(const nlohmann::json& j) {
     ConfigFileData data;
-    if (path.empty()) return data;
+
+    ReadJson(j, "debug_level", data.debugLevel);
+    ReadJson(j, "background",  data.background);
+    ReadJson(j, "audio",       data.audio);
+
+    if (j.contains("shortcuts") && j["shortcuts"].is_object()) {
+        const auto& sc = j["shortcuts"];
+        ReadJson(sc, "cycle",          data.cycleShortcut);
+        ReadJson(sc, "exit",           data.exitShortcut);
+        ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
+        ReadJson(sc, "reconnect",      data.reconnectShortcut);
+        ReadJson(sc, "clipboard",      data.clipboardShortcut);
+        ReadJson(sc, "forward_keys",   data.forwardKeysShortcut);
+    }
+
+    if (j.contains("profiles") && j["profiles"].is_array()) {
+        for (const auto& pj : j["profiles"]) {
+            if (pj.is_object()) {
+                auto profile = ParseProfile(pj);
+                if (!profile.host.empty() && !profile.key.empty()) {
+                    if (profile.name.empty()) profile.name = profile.host;
+                    data.profiles.push_back(std::move(profile));
+                } else if (!profile.name.empty() || !profile.host.empty() || !profile.key.empty()) {
+                    std::string name = profile.name.empty() ? "(unnamed)" : profile.name;
+                    DEBUG_WARN_F("CONFIG", "Skipping profile '{}': host and key are both required", name);
+                }
+            }
+        }
+    }
+
+    ReadJson(j, "host",     data.host);
+    ReadJson(j, "port",     data.port);
+    ReadJson(j, "key",      data.key);
+    ReadJson(j, "shortcut", data.shortcut);
+
+    return data;
+}
+
+ConfigFileData ConfigFile::Load(const std::string& path) {
+    if (path.empty()) return {};
 
     std::ifstream file(path);
     if (!file.is_open()) {
         DEBUG_WARN("CONFIG", "Could not open config file: " + path);
-        return data;
+        return {};
     }
 
     try {
-        nlohmann::json j = nlohmann::json::parse(file);
-
-        ReadJson(j, "debug_level", data.debugLevel);
-        ReadJson(j, "background",  data.background);
-        ReadJson(j, "audio",       data.audio);
-
-        if (j.contains("shortcuts") && j["shortcuts"].is_object()) {
-            const auto& sc = j["shortcuts"];
-            ReadJson(sc, "cycle",          data.cycleShortcut);
-            ReadJson(sc, "exit",           data.exitShortcut);
-            ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
-            ReadJson(sc, "local",          data.localShortcut);
-            ReadJson(sc, "reconnect",      data.reconnectShortcut);
-        }
-
-        if (j.contains("profiles") && j["profiles"].is_array()) {
-            for (const auto& pj : j["profiles"]) {
-                if (pj.is_object()) {
-                    auto profile = ParseProfile(pj);
-                    if (!profile.host.empty() && !profile.key.empty()) {
-                        if (profile.name.empty()) {
-                            profile.name = profile.host;
-                        }
-                        data.profiles.push_back(std::move(profile));
-                    } else if (!profile.name.empty() || !profile.host.empty() || !profile.key.empty()) {
-                        std::string name = profile.name.empty() ? "(unnamed)" : profile.name;
-                        DEBUG_WARN_F("CONFIG", "Skipping profile '{}': host and key are both required", name);
-                    }
-                }
-            }
-        }
-
-        ReadJson(j, "host",     data.host);
-        ReadJson(j, "port",     data.port);
-        ReadJson(j, "key",      data.key);
-        ReadJson(j, "shortcut", data.shortcut);
-
+        ConfigFileData data = ParseConfigJson(nlohmann::json::parse(file));
         DEBUG_INFO("CONFIG", "Loaded config from: " + path);
+        return data;
     } catch (const nlohmann::json::exception& e) {
         std::cerr << "Error: Failed to parse config file '" << path << "': " << e.what() << std::endl;
         DEBUG_WARN("CONFIG", "Failed to parse config file: " + std::string(e.what()));
+        return {};
     }
+}
 
-    return data;
+ConfigFileData ConfigFile::LoadFromString(const std::string& jsonStr) {
+    try {
+        return ParseConfigJson(nlohmann::json::parse(jsonStr));
+    } catch (const nlohmann::json::exception& e) {
+        DEBUG_WARN("CONFIG", "Failed to parse config string: " + std::string(e.what()));
+        return {};
+    }
 }
 
 bool ConfigFile::CreateDefault(const std::string& path) {
@@ -219,15 +246,32 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         if (ec) return false;
     }
 
+    nlohmann::ordered_json profile = {
+        {"name",                 ""},
+        {"host",                 ""},
+        {"port",                 6837},
+        {"key",                  ""},
+        {"shortcut",             ""},
+        {"auto_connect",         true},
+        {"speech",               true},
+        {"mute_on_local_control", false},
+        {"forward_nvda_sounds",  true}
+    };
+
     nlohmann::ordered_json j = {
         {"schema_version", CURRENT_SCHEMA_VERSION},
-        {"debug_level", "warning"},
-        {"background", false},
-        {"audio", true},
+        {"debug_level",    "warning"},
+        {"background",     false},
+        {"audio",          true},
         {"shortcuts", nlohmann::ordered_json({
-            {"cycle", "ctrl+alt+f11"}
+            {"cycle",          Config::DEFAULT_CYCLE_SHORTCUT},
+            {"exit",           ""},
+            {"reinstall_hook", ""},
+            {"reconnect",      ""},
+            {"clipboard",      ""},
+            {"forward_keys",   Config::DEFAULT_FORWARD_KEYS_SHORTCUT}
         })},
-        {"profiles", nlohmann::ordered_json::array()}
+        {"profiles", nlohmann::ordered_json::array({profile})}
     };
 
     std::ofstream file(path);
@@ -246,27 +290,18 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
     j["audio"] = data.audio.value_or(true);
     {
         nlohmann::ordered_json sc;
-        sc["cycle"] = data.cycleShortcut.value_or("ctrl+alt+f11");
+        sc["cycle"] = data.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
         if (data.exitShortcut)           sc["exit"]           = *data.exitShortcut;
         if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
-        if (data.localShortcut)          sc["local"]          = *data.localShortcut;
         if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
+        if (data.clipboardShortcut)      sc["clipboard"]      = *data.clipboardShortcut;
+        sc["forward_keys"] = data.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
         j["shortcuts"] = std::move(sc);
     }
 
     auto profilesArr = nlohmann::ordered_json::array();
     for (const auto& p : data.profiles) {
-        nlohmann::ordered_json pj;
-        pj[ProfileFields::NAME]                 = p.name;
-        pj[ProfileFields::HOST]                 = p.host;
-        pj[ProfileFields::PORT]                 = p.port;
-        pj[ProfileFields::KEY]                  = p.key;
-        pj[ProfileFields::SHORTCUT]             = p.shortcut;
-        pj[ProfileFields::AUTO_CONNECT]         = p.autoConnect;
-        pj[ProfileFields::SPEECH]               = p.speech;
-        pj[ProfileFields::MUTE_ON_LOCAL_CONTROL] = p.muteOnLocalControl;
-        pj[ProfileFields::FORWARD_AUDIO]         = p.forwardAudio;
-        profilesArr.push_back(std::move(pj));
+        profilesArr.push_back(SerializeProfile(p));
     }
     j["profiles"] = std::move(profilesArr);
 
@@ -281,4 +316,15 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
 
     file << j.dump(4) << std::endl;
     return file.good();
+}
+
+void ConfigFile::StripInvalidProfiles(std::vector<ProfileConfig>& profiles) {
+    profiles.erase(
+        std::remove_if(profiles.begin(), profiles.end(),
+            [](const ProfileConfig& p) { return p.host.empty() || p.key.empty(); }),
+        profiles.end());
+}
+
+std::string ConfigFile::ProfileToJsonString(const ProfileConfig& p) {
+    return SerializeProfile(p).dump();
 }

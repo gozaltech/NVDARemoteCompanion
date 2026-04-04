@@ -79,6 +79,8 @@ public class MainActivity extends BaseActivity {
         Intent intent = new Intent(this, ConnectionService.class);
         startService(intent);
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+        UpdateDialog.checkAndShowIfNeeded(this);
     }
 
     @Override

@@ -1,6 +1,8 @@
 package org.gozaltech.nvdaremotecompanion.android;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -41,6 +43,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
         }
     };
 
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
@@ -50,6 +53,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
         startService(intent);
         serviceBound = bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
     }
+
 
     @Override
     public boolean onUnbind(Intent intent) {
@@ -69,6 +73,17 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+    }
+
+    private void sendClipboardToRemote() {
+        int activeProfile = NativeBridge.nativeGetActiveProfile();
+        if (activeProfile < 0) return;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null || !clipboard.hasPrimaryClip()) return;
+        ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+        CharSequence text = item != null ? item.getText() : null;
+        if (text == null || text.length() == 0) return;
+        NativeBridge.nativeSendClipboardText(text.toString(), activeProfile);
     }
 
     @Override
@@ -91,7 +106,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
         }
 
         int activeProfile = NativeBridge.nativeGetActiveProfile();
-        if (activeProfile < 0) return false;
+        if (activeProfile < 0 || !NativeBridge.nativeIsSendingKeys()) return false;
 
         if (pressed && !isRepeat) {
             stopRepeat();
@@ -109,7 +124,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
             @Override
             public void run() {
                 int current = NativeBridge.nativeGetActiveProfile();
-                if (current == profileIndex) {
+                if (current == profileIndex && NativeBridge.nativeIsSendingKeys()) {
                     NativeBridge.nativeSendKeyEvent(
                             winKey.vk, winKey.scan, true, winKey.extended, profileIndex
                     );

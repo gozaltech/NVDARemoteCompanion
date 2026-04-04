@@ -69,6 +69,11 @@ class AboutTab {
         donateBtn.setOnClickListener(v -> openUrl("https://paypal.me/gozaltech"));
         content.addView(donateBtn);
 
+        Button checkUpdateBtn = new Button(activity);
+        checkUpdateBtn.setText(R.string.update_check);
+        checkUpdateBtn.setOnClickListener(v -> UpdateDialog.checkAndShow(activity));
+        content.addView(checkUpdateBtn);
+
         ScrollView scroll = new ScrollView(activity);
         scroll.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));

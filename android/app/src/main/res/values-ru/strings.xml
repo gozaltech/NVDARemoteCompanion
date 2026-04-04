@@ -18,14 +18,14 @@
     <string name="no_profiles">Профили не настроены. Нажмите «Добавить профиль» для создания.</string>
     <string name="profile_connected">Подключён</string>
     <string name="profile_disconnected">Отключён</string>
-    <string name="profile_active">Активен — отправка клавиш</string>
+    <string name="profile_active">Активен</string>
+    <string name="profile_sending_keys">Активен — отправка клавиш</string>
 
     <string name="add_profile">Добавить профиль</string>
     <string name="connect">Подключить</string>
     <string name="disconnect">Отключить</string>
     <string name="set_active">Сделать активным</string>
-    <string name="go_local">Локальный режим</string>
-    <string name="edit">Изменить</string>
+<string name="edit">Изменить</string>
     <string name="save">Сохранить</string>
     <string name="delete_profile">Удалить профиль</string>
 
@@ -100,4 +100,29 @@
     <string name="about_contact">Написать в Telegram</string>
     <string name="about_report_issue">Сообщить о проблеме</string>
     <string name="about_donate">Поддержать проект</string>
+
+    <string name="update_check">Проверить обновления</string>
+    <string name="update_checking">Проверка обновлений…</string>
+    <string name="update_up_to_date">У вас установлена последняя версия.</string>
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_available">Доступно обновление: v%s</string>
+    <string name="update_version_line">Текущая: %1$s  →  Новая: %2$s</string>
+    <string name="update_changelog">Что нового</string>
+    <string name="update_no_changelog">Примечания к выпуску отсутствуют.</string>
+    <string name="update_download">Загрузить обновление</string>
+    <string name="update_later">Позже</string>
+    <string name="update_downloading_title">Загрузка обновления…</string>
+    <string name="update_downloading">Загрузка… %d%%</string>
+    <string name="update_cancel_confirm">Отменить загрузку?</string>
+    <string name="update_ready">Версия %s готова к установке.</string>
+    <string name="update_install">Установить обновление</string>
+    <string name="update_error">Не удалось проверить обновления. Попробуйте позже.</string>
+    <string name="update_signature_mismatch">Обновление отклонено: сертификат загруженного файла не совпадает с установленным приложением.</string>
+    <string name="update_install_failed">Ошибка установки обновления: %s</string>
+
+    <string name="send_keys">Отправлять нажатия клавиш на удалённый ПК</string>
+    <string name="send_clipboard">Отправить буфер обмена на удалённый ПК</string>
+    <string name="clipboard_sent">Буфер обмена отправлен на удалённый ПК</string>
+    <string name="clipboard_empty">Буфер обмена пуст</string>
+    <string name="clipboard_not_connected">Нет подключения к удалённому ПК</string>
 </resources>
