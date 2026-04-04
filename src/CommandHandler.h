@@ -24,7 +24,8 @@ public:
     bool ConnectInteractive();
     void RunCommandLoop();
 
-    static bool AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg);
+    static bool AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg,
+                                      ProfileConfig partial = {});
 
     const std::vector<ProfileSession>& GetSessions() const { return m_sessions; }
     int GetSessionCount() const { return Config::isize(m_sessions); }

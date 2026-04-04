@@ -475,18 +475,31 @@ static bool PromptProfileInteractive(
     return true;
 }
 
-bool CommandHandler::AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg) {
+bool CommandHandler::AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg,
+                                           ProfileConfig partial) {
     cfg.profiles.erase(
         std::remove_if(cfg.profiles.begin(), cfg.profiles.end(),
             [](const ProfileConfig& p) { return p.host.empty() || p.key.empty(); }),
         cfg.profiles.end());
 
-    std::cout << "Adding new profile (press Escape to cancel)" << std::endl;
+    ProfileConfig p = partial;
 
-    ProfileConfig p;
-    if (!PromptProfileInteractive(PromptLineImpl, p, cfg.profiles)) {
-        std::cout << "Cancelled." << std::endl;
-        return false;
+    if (!p.host.empty() && !p.key.empty()) {
+        if (p.name.empty()) p.name = p.host;
+        p.name = MakeUniqueName(p.name, cfg.profiles);
+    } else {
+        std::cout << "Adding new profile (press Escape to cancel)" << std::endl;
+        auto promptWithDefaults = [&p](const std::string& label, std::string& out, const std::string& def) {
+            const std::string& effective =
+                (label == "Host"   && !p.host.empty())  ? p.host :
+                (label == "Key"    && !p.key.empty())   ? p.key  :
+                def;
+            return PromptLineImpl(label, out, effective);
+        };
+        if (!PromptProfileInteractive(promptWithDefaults, p, cfg.profiles)) {
+            std::cout << "Cancelled." << std::endl;
+            return false;
+        }
     }
 
     cfg.profiles.push_back(p);
