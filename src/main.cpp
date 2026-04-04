@@ -430,18 +430,6 @@ int main(int argc, char* argv[]) {
         cfg.profiles.push_back(std::move(*legacy));
     }
 
-    if (args.hasConnectionParams) {
-        ProfileConfig p;
-        p.name = "cli";
-        p.host = args.host;
-        p.port = args.port;
-        p.key = args.key;
-        p.shortcut = args.shortcut;
-        p.autoConnect = true;
-        p.speech = args.speechEnabled;
-        cfg.profiles.clear();
-        cfg.profiles.push_back(std::move(p));
-    }
 
 #ifdef _WIN32
     if (args.backgroundMode) {
@@ -576,7 +564,17 @@ int main(int argc, char* argv[]) {
         cmdHandler.ReconnectAll();
     });
 
-    if (cfg.profiles.empty()) {
+    if (args.hasConnectionParams) {
+        ProfileConfig p;
+        p.host = args.host;
+        p.port = args.port;
+        p.key = args.key;
+        p.shortcut = args.shortcut;
+        p.speech = args.speechEnabled;
+        if (!cmdHandler.ConnectFromParams(p)) {
+            return 1;
+        }
+    } else if (cfg.profiles.empty()) {
         if (!cmdHandler.ConnectInteractive()) {
             return 1;
         }

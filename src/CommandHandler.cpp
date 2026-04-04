@@ -146,6 +146,34 @@ bool CommandHandler::HasDisconnectedSessions() const {
     return false;
 }
 
+bool CommandHandler::ConnectFromParams(const ProfileConfig& p) {
+    auto cm = std::make_unique<ConnectionManager>();
+    cm->SetSpeechEnabled(p.speech);
+    cm->SetMuteOnLocalControl(p.muteOnLocalControl);
+    cm->SetForwardAudioEnabled(p.forwardAudio);
+    if (m_disconnectCallback) cm->SetDisconnectCallback(m_disconnectCallback);
+    if (m_reconnectCallback) cm->SetReconnectCallback(m_reconnectCallback);
+
+    std::cout << "Connecting to " << p.host << ":" << p.port << "..." << std::endl;
+    if (!cm->EstablishConnection(p.host, p.port, p.key, p.shortcut)) {
+        return false;
+    }
+
+    if (!p.shortcut.empty()) {
+        KeyboardState::SetToggleShortcutAt(0, p.shortcut);
+    }
+    MessageSender::SetNetworkClient(0, cm->GetClient());
+
+    ProfileSession session;
+    session.config = p;
+    session.connection = std::move(cm);
+    session.shortcutIndex = 0;
+    session.unsaved = true;
+    m_sessions.push_back(std::move(session));
+    std::cout << "Connected" << std::endl;
+    return true;
+}
+
 bool CommandHandler::ConnectInteractive() {
     auto paramsOpt = PromptForConnectionParams();
     if (!paramsOpt) return false;
@@ -165,9 +193,14 @@ bool CommandHandler::ConnectInteractive() {
     MessageSender::SetNetworkClient(0, cm->GetClient());
 
     ProfileSession session;
-    session.config.name = "interactive";
+    session.config.name     = "interactive";
+    session.config.host     = paramsOpt->host;
+    session.config.port     = paramsOpt->port;
+    session.config.key      = paramsOpt->key;
+    session.config.shortcut = paramsOpt->shortcut;
     session.connection = std::move(cm);
     session.shortcutIndex = 0;
+    session.unsaved = true;
     m_sessions.push_back(std::move(session));
     return true;
 }
@@ -305,6 +338,7 @@ void CommandHandler::HandleCommand(const std::string& line) {
         {{"add"},                       [](CommandHandler& h, const std::string& a){ h.CmdAdd(a); }},
         {{"edit"},                      [](CommandHandler& h, const std::string& a){ h.CmdEdit(a); }},
         {{"delete", "rm"},              [](CommandHandler& h, const std::string& a){ h.CmdDelete(a); }},
+        {{"save"},                      [](CommandHandler& h, const std::string& a){ h.CmdSave(a); }},
         {{"help", "?"},                 [](CommandHandler& h, const std::string&)  { h.CmdHelp(); }},
 #ifdef _WIN32
         {{"reinstall-hook", "hook"},    [](CommandHandler& h, const std::string&)  { h.CmdReinstallHook(); }},
@@ -654,11 +688,59 @@ void CommandHandler::CmdHelp() {
     std::cout << "  edit <name|idx> <field> <value>" << std::endl;
     std::cout << "                      Edit a profile field" << std::endl;
     std::cout << "  delete (rm) <name|idx>  Delete a profile" << std::endl;
+    std::cout << "  save [name|idx]         Save current interactive connection as a profile" << std::endl;
 #ifdef _WIN32
     std::cout << "  reinstall-hook (hook)  Reinstall keyboard hook (fixes NVDA modifier after NVDA restart)" << std::endl;
 #endif
     std::cout << "  help (?)            Show this help" << std::endl;
     std::cout << "  quit (exit)         Exit the application" << std::endl;
+}
+
+void CommandHandler::CmdSave(const std::string& args) {
+    int idx = -1;
+    if (!args.empty()) {
+        idx = FindProfileIndex(args);
+        if (idx < 0) {
+            std::cout << "Profile not found: " << args << std::endl;
+            return;
+        }
+    } else {
+        for (int i = 0; i < Config::isize(m_sessions); i++) {
+            if (m_sessions[i].unsaved) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            std::cout << "No unsaved connection found. Use: save <name or index>" << std::endl;
+            return;
+        }
+    }
+
+    auto& session = m_sessions[idx];
+    if (session.config.host.empty() || session.config.key.empty()) {
+        std::cout << "Session [" << idx << "] has no host or key — cannot save." << std::endl;
+        return;
+    }
+    if (!session.unsaved) {
+        std::cout << "Session [" << idx << "] '" << session.config.name << "' is already saved as a profile." << std::endl;
+        return;
+    }
+
+    std::string nameInput;
+    std::string defaultName = session.config.host;
+    if (!PromptLine("Profile name", nameInput, defaultName)) return;
+    if (nameInput.empty()) nameInput = defaultName;
+
+    ProfileConfig p = session.config;
+    p.name = MakeUniqueName(nameInput, m_configData.profiles);
+
+    session.config.name = p.name;
+    session.unsaved = false;
+
+    m_configData.profiles.push_back(p);
+    SaveConfig();
+    std::cout << "Session saved as profile [" << (Config::isize(m_configData.profiles) - 1) << "] '" << p.name << "'" << std::endl;
 }
 
 void CommandHandler::CmdReinstallHook() {

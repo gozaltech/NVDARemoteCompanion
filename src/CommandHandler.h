@@ -14,6 +14,7 @@ struct ProfileSession {
     ProfileConfig config;
     std::unique_ptr<ConnectionManager> connection;
     int shortcutIndex = -1;
+    bool unsaved = false;
 };
 
 class CommandHandler {
@@ -22,6 +23,7 @@ public:
 
     int ConnectAutoProfiles();
     bool ConnectInteractive();
+    bool ConnectFromParams(const ProfileConfig& p);
     void RunCommandLoop();
 
     static bool AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg,
@@ -51,6 +53,7 @@ private:
     void CmdEdit(const std::string& args);
     void CmdDelete(const std::string& args);
     void CmdHelp();
+    void CmdSave(const std::string& args);
     void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);
