@@ -58,6 +58,7 @@ struct CommandLineArgs {
     bool audioEnabled = true;
     bool showHelp = false;
     bool createConfig = false;
+    bool addProfile = false;
     bool backgroundMode = false;
     bool noBackground = false;
     bool hasConnectionParams = false;
@@ -170,6 +171,7 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
     auto cycleShortcutHandler = ArgHandlers::createStringHandler(&CommandLineArgs::cycleShortcut,
         "--cycle-shortcut requires a key combination");
     auto createConfigHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::createConfig, true);
+    auto addProfileHandler   = ArgHandlers::createFlagHandler(&CommandLineArgs::addProfile, true);
     auto backgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::backgroundMode, true);
     auto noBackgroundHandler = ArgHandlers::createFlagHandler(&CommandLineArgs::noBackground, true);
 
@@ -186,6 +188,8 @@ CommandLineArgs parseArguments(int argc, char* argv[]) {
         {"-c", configHandler},
         {"--config", configHandler},
         {"--create-config", createConfigHandler},
+        {"-A", addProfileHandler},
+        {"--add-profile", addProfileHandler},
         {"-b", backgroundHandler},
         {"--background", backgroundHandler},
         {"--no-background", noBackgroundHandler},
@@ -245,7 +249,8 @@ void printHelp(const char* programName) {
     std::cout << "  -t, --trace           Enable trace debug logging (most detailed)\n\n";
     std::cout << "Config File Options:\n";
     std::cout << "  -c, --config PATH     Path to config file (default: auto-detect)\n";
-    std::cout << "      --create-config   Create a default config file and exit\n\n";
+    std::cout << "      --create-config   Create a default config file and exit\n";
+    std::cout << "  -A, --add-profile     Interactively add a profile to the config and exit\n\n";
     std::cout << "Other Options:\n";
     std::cout << "      --no-speech       Disable speech synthesis\n";
     std::cout << "      --no-audio        Disable companion audio feedback (toggle tones, connect/disconnect sounds)\n";
@@ -338,6 +343,17 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: Failed to create config file: " << path << std::endl;
             return 1;
         }
+    }
+
+    if (args.addProfile) {
+        std::string configPath = ConfigFile::FindConfigFile(args.configPath);
+        if (configPath.empty()) {
+            configPath = args.configPath.empty() ? ConfigFile::DefaultPath() : args.configPath;
+            ConfigFile::CreateDefault(configPath);
+        }
+        ConfigFile::Migrate(configPath);
+        ConfigFileData cfg = ConfigFile::Load(configPath);
+        return CommandHandler::AddProfileInteractive(configPath, cfg) ? 0 : 1;
     }
 
     ConfigFileData cfg;

@@ -403,7 +403,7 @@ void CommandHandler::CmdDisconnect(const std::string& args) {
     RebuildShortcuts();
 }
 
-bool CommandHandler::PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue) {
+static bool PromptLineImpl(const std::string& prompt, std::string& out, const std::string& defaultValue) {
     if (!defaultValue.empty())
         std::cout << prompt << " [" << defaultValue << "]: " << std::flush;
     else
@@ -415,6 +415,87 @@ bool CommandHandler::PromptLine(const std::string& prompt, std::string& out, con
     if (line.empty() && !defaultValue.empty())
         line = defaultValue;
     out = line;
+    return true;
+}
+
+bool CommandHandler::PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue) {
+    return PromptLineImpl(prompt, out, defaultValue);
+}
+
+static std::string MakeUniqueName(const std::string& base, const std::vector<ProfileConfig>& existing) {
+    std::string name = base;
+    int suffix = 2;
+    while (std::any_of(existing.begin(), existing.end(),
+            [&](const ProfileConfig& e) { return e.name == name; }))
+        name = base + " " + std::to_string(suffix++);
+    return name;
+}
+
+static bool PromptProfileInteractive(
+        std::function<bool(const std::string&, std::string&, const std::string&)> prompt,
+        ProfileConfig& p,
+        const std::vector<ProfileConfig>& existing) {
+    std::string input;
+
+    if (!prompt("Name (optional)", input, "")) return false;
+    std::string nameInput = input;
+
+    if (!prompt("Host", input, "")) return false;
+    if (input.empty()) { std::cout << "Host is required." << std::endl; return false; }
+    p.host = input;
+
+    if (nameInput.empty()) nameInput = p.host;
+    p.name = MakeUniqueName(nameInput, existing);
+
+    if (!prompt("Port", input, std::to_string(Config::DEFAULT_PORT))) return false;
+    try { p.port = input.empty() ? Config::DEFAULT_PORT : std::stoi(input); }
+    catch (...) { std::cout << "Invalid port, using default." << std::endl; p.port = Config::DEFAULT_PORT; }
+
+    if (!prompt("Key", input, "")) return false;
+    if (input.empty()) { std::cout << "Key is required." << std::endl; return false; }
+    p.key = input;
+
+#ifdef _WIN32
+    if (!prompt("Shortcut (optional, e.g. ctrl+win+f12)", input, "")) return false;
+    p.shortcut = input;
+#endif
+
+    if (!prompt("Auto connect (y/n)", input, "y")) return false;
+    p.autoConnect = Config::StringToBool(input, true);
+
+    if (!prompt("Speech (y/n)", input, "y")) return false;
+    p.speech = Config::StringToBool(input, true);
+
+    if (!prompt("Mute on local control (y/n)", input, "n")) return false;
+    p.muteOnLocalControl = Config::StringToBool(input);
+
+    if (!prompt("Forward NVDA sounds from remote (y/n)", input, "y")) return false;
+    p.forwardAudio = Config::StringToBool(input, true);
+
+    return true;
+}
+
+bool CommandHandler::AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg) {
+    cfg.profiles.erase(
+        std::remove_if(cfg.profiles.begin(), cfg.profiles.end(),
+            [](const ProfileConfig& p) { return p.host.empty() || p.key.empty(); }),
+        cfg.profiles.end());
+
+    std::cout << "Adding new profile (press Escape to cancel)" << std::endl;
+
+    ProfileConfig p;
+    if (!PromptProfileInteractive(PromptLineImpl, p, cfg.profiles)) {
+        std::cout << "Cancelled." << std::endl;
+        return false;
+    }
+
+    cfg.profiles.push_back(p);
+    if (!ConfigFile::Save(configPath, cfg)) {
+        std::cerr << "Error: Failed to save config to " << configPath << std::endl;
+        return false;
+    }
+
+    std::cout << "Profile '" << p.name << "' saved to " << configPath << std::endl;
     return true;
 }
 
@@ -431,9 +512,9 @@ void CommandHandler::CmdAdd(const std::string& args) {
         }
 
         ProfileConfig p;
-        p.name = name;
         p.host = host;
         p.key = key;
+        p.name = MakeUniqueName(name.empty() ? host : name, m_configData.profiles);
 
         std::string token;
         if (ss >> token) {
@@ -442,61 +523,19 @@ void CommandHandler::CmdAdd(const std::string& args) {
         if (ss >> token) p.shortcut = token;
         if (ss >> token) p.autoConnect = Config::StringToBool(token);
 
-        ProfileSession session;
-        session.config = p;
-        m_sessions.push_back(std::move(session));
-        m_configData.profiles.push_back(p);
-        SaveConfig();
-        std::cout << "Profile added: [" << (m_sessions.size() - 1) << "] " << p.name << std::endl;
+        AppendProfile(p);
         return;
     }
 
     std::cout << "Adding new profile (press Escape to cancel)" << std::endl;
 
     ProfileConfig p;
-    std::string input;
+    if (!PromptProfileInteractive(PromptLineImpl, p, m_configData.profiles)) {
+        std::cout << "Cancelled." << std::endl;
+        return;
+    }
 
-    if (!PromptLine("Name", input)) { std::cout << "Cancelled." << std::endl; return; }
-    if (input.empty()) { std::cout << "Name is required." << std::endl; return; }
-    p.name = input;
-
-    if (!PromptLine("Host", input)) { std::cout << "Cancelled." << std::endl; return; }
-    if (input.empty()) { std::cout << "Host is required." << std::endl; return; }
-    p.host = input;
-
-    if (!PromptLine("Port", input, std::to_string(Config::DEFAULT_PORT))) { std::cout << "Cancelled." << std::endl; return; }
-    try { p.port = input.empty() ? Config::DEFAULT_PORT : std::stoi(input); }
-    catch (...) { std::cout << "Invalid port, using default." << std::endl; p.port = Config::DEFAULT_PORT; }
-
-    if (!PromptLine("Key", input)) { std::cout << "Cancelled." << std::endl; return; }
-    if (input.empty()) { std::cout << "Key is required." << std::endl; return; }
-    p.key = input;
-
-#ifdef _WIN32
-    if (!PromptLine("Shortcut (optional, e.g. ctrl+win+f12)", input, "")) { std::cout << "Cancelled." << std::endl; return; }
-    p.shortcut = input;
-#endif
-
-    if (!PromptLine("Auto connect (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
-    p.autoConnect = input.empty() ? true : Config::StringToBool(input, true);
-
-    if (!PromptLine("Speech (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
-    p.speech = input.empty() ? true : Config::StringToBool(input, true);
-
-    if (!PromptLine("Mute on local control (y/n)", input, "n")) { std::cout << "Cancelled." << std::endl; return; }
-    p.muteOnLocalControl = Config::StringToBool(input);
-
-    if (!PromptLine("Forward NVDA sounds from remote (y/n)", input, "y")) { std::cout << "Cancelled." << std::endl; return; }
-    p.forwardAudio = input.empty() ? true : Config::StringToBool(input, true);
-
-    ProfileSession session;
-    session.config = p;
-    m_sessions.push_back(std::move(session));
-    m_configData.profiles.push_back(p);
-    SaveConfig();
-
-    int idx = Config::isize(m_sessions) - 1;
-    std::cout << "Profile added: [" << idx << "] " << p.name << std::endl;
+    AppendProfile(p);
 }
 
 void CommandHandler::CmdEdit(const std::string& args) {
@@ -639,6 +678,15 @@ int CommandHandler::FindProfileIndex(const std::string& nameOrIndex) {
         if (pname == lower) return i;
     }
     return -1;
+}
+
+void CommandHandler::AppendProfile(const ProfileConfig& p) {
+    ProfileSession session;
+    session.config = p;
+    m_sessions.push_back(std::move(session));
+    m_configData.profiles.push_back(p);
+    SaveConfig();
+    std::cout << "Profile added: [" << (Config::isize(m_sessions) - 1) << "] " << p.name << std::endl;
 }
 
 void CommandHandler::SaveConfig() {

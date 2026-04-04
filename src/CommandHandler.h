@@ -24,6 +24,8 @@ public:
     bool ConnectInteractive();
     void RunCommandLoop();
 
+    static bool AddProfileInteractive(const std::string& configPath, ConfigFileData& cfg);
+
     const std::vector<ProfileSession>& GetSessions() const { return m_sessions; }
     int GetSessionCount() const { return Config::isize(m_sessions); }
 
@@ -54,6 +56,7 @@ private:
     bool PromptLine(const std::string& prompt, std::string& out, const std::string& defaultValue = "");
     bool IsValidSessionIndex(int index) const { return index >= 0 && index < Config::isize(m_sessions); }
 
+    void AppendProfile(const ProfileConfig& p);
     void SaveConfig();
     void ConnectSession(int index);
     void DisconnectSession(int index);
