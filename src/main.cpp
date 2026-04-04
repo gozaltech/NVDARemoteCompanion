@@ -532,6 +532,8 @@ int main(int argc, char* argv[]) {
             KeyboardState::SetLocalShortcut(*cfg.localShortcut);
         if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
             KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
+        if (cfg.clipboardShortcut && !cfg.clipboardShortcut->empty())
+            KeyboardState::SetClipboardShortcut(*cfg.clipboardShortcut);
 #ifdef _WIN32
         if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
             KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);

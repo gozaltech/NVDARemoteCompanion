@@ -7,12 +7,14 @@
 
 #include "AndroidSpeech.h"
 #include "AndroidAudio.h"
+#include "AndroidClipboard.h"
 #include "ConfigFile.h"
 #include "ConnectionManager.h"
 #include "MessageSender.h"
 #include "AppState.h"
 #include "KeyEvent.h"
 #include "KeyboardState.h"
+#include "Clipboard.h"
 #include "Debug.h"
 #include <fstream>
 #include <sstream>
@@ -131,6 +133,7 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
                 g_bridgeClass, "onConnectionStateChanged", "(IZ)V");
         if (!g_onConnStateChanged)
             LOGE("onConnectionStateChanged method not found");
+        AndroidClipboard::Initialize(env, g_bridgeClass);
     }
 
     {
@@ -144,6 +147,9 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
 
         std::string reconnectSc = g_config.reconnectShortcut.value_or("");
         if (!reconnectSc.empty()) KeyboardState::SetReconnectShortcut(reconnectSc);
+
+        std::string clipboardSc = g_config.clipboardShortcut.value_or("");
+        if (!clipboardSc.empty()) KeyboardState::SetClipboardShortcut(clipboardSc);
 
         for (int i = 0; i < static_cast<int>(g_config.profiles.size()); i++) {
             if (!g_config.profiles[i].shortcut.empty())
@@ -370,6 +376,21 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeProcessModifie
         AppState::ToggleSendingKeys(toggleIdx);
         return JNI_TRUE;
     }
+    if (KeyboardState::CheckClipboardShortcut(vk)) {
+        KeyboardState::ResetModifiers();
+        if (g_bridgeClass) {
+            bool didAttach = false;
+            JNIEnv* cbEnv = GetEnv(didAttach);
+            if (cbEnv) {
+                static jmethodID s_onClipShortcut = cbEnv->GetStaticMethodID(
+                    g_bridgeClass, "onClipboardShortcutTriggered", "()V");
+                if (s_onClipShortcut)
+                    cbEnv->CallStaticVoidMethod(g_bridgeClass, s_onClipShortcut);
+                if (didAttach) g_jvm->DetachCurrentThread();
+            }
+        }
+        return JNI_TRUE;
+    }
     return JNI_FALSE;
 }
 
@@ -385,6 +406,25 @@ JNIEXPORT jint JNICALL
 Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetActiveProfile(
         JNIEnv*, jobject) {
     return static_cast<jint>(AppState::GetActiveProfile());
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSendClipboardText(
+        JNIEnv* env, jobject,
+        jstring text,
+        jint profileIndex) {
+
+    int idx = static_cast<int>(profileIndex);
+    if (AppState::GetActiveProfile() != idx && idx != -1) return;
+
+    const char* chars = env->GetStringUTFChars(text, nullptr);
+    std::string clipText(chars);
+    env->ReleaseStringUTFChars(text, chars);
+
+    if (clipText.empty()) return;
+
+    MessageSender::SendClipboardText(clipText);
+    LOGI("Clipboard text sent from Android");
 }
 
 }

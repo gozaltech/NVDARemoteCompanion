@@ -23,7 +23,7 @@ private:
     ConnectionParams m_params;
     bool m_protocolHandshakeComplete;
     std::function<void()> m_disconnectCallback;
-    std::function<void()> m_reconnectCallback; // fired after a successful auto-reconnect
+    std::function<void()> m_reconnectCallback;
     bool m_speechEnabled = false;
     bool m_muteOnLocalControl = false;
     bool m_forwardAudio = true;

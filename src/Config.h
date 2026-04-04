@@ -45,6 +45,7 @@ namespace Config {
     constexpr const char* MSG_TYPE_KEY = "key";
     constexpr const char* MSG_TYPE_TONE = "tone";
     constexpr const char* MSG_TYPE_WAVE = "wave";
+    constexpr const char* MSG_TYPE_SET_CLIPBOARD_TEXT = "set_clipboard_text";
     
     constexpr const char* ERROR_PREFIX = "Error: ";
     constexpr const char* ERROR_HOST_EMPTY = "Host cannot be empty. Please enter a valid hostname or IP address.";

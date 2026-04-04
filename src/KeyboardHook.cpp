@@ -4,6 +4,7 @@
 #include "EventChecker.h"
 #include "KeyEvent.h"
 #include "MessageSender.h"
+#include "Clipboard.h"
 #include "Speech.h"
 #include "Debug.h"
 
@@ -20,6 +21,16 @@ void KeyboardHook::OnExit() {
 void KeyboardHook::OnReinstallHook() {
     if (g_mainThreadId != 0)
         PostThreadMessage(g_mainThreadId, WM_REINSTALL_HOOK, 0, 0);
+}
+
+void KeyboardHook::OnClipboardShortcut() {
+    std::string text = Clipboard::GetText();
+    if (text.empty()) {
+        Speech::Speak("Clipboard is empty", false);
+        return;
+    }
+    MessageSender::SendClipboardText(text);
+    Speech::Speak("Clipboard sent", false);
 }
 
 LRESULT KeyboardHook::ProcessKeyEvent(WPARAM wParam, DWORD vkCode, WORD scanCode, bool isExtended) {

@@ -179,6 +179,7 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
             ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
             ReadJson(sc, "local",          data.localShortcut);
             ReadJson(sc, "reconnect",      data.reconnectShortcut);
+            ReadJson(sc, "clipboard",      data.clipboardShortcut);
         }
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
@@ -242,7 +243,8 @@ bool ConfigFile::CreateDefault(const std::string& path) {
             {"local",          ""},
             {"exit",           ""},
             {"reinstall_hook", ""},
-            {"reconnect",      ""}
+            {"reconnect",      ""},
+            {"clipboard",      ""}
         })},
         {"profiles", nlohmann::ordered_json::array({profile})}
     };
@@ -268,6 +270,7 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
         if (data.localShortcut)          sc["local"]          = *data.localShortcut;
         if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
+        if (data.clipboardShortcut)      sc["clipboard"]      = *data.clipboardShortcut;
         j["shortcuts"] = std::move(sc);
     }
 

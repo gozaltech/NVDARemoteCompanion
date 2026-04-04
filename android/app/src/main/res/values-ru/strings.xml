@@ -119,4 +119,9 @@
     <string name="update_error">Не удалось проверить обновления. Попробуйте позже.</string>
     <string name="update_signature_mismatch">Обновление отклонено: сертификат загруженного файла не совпадает с установленным приложением.</string>
     <string name="update_install_failed">Ошибка установки обновления: %s</string>
+
+    <string name="send_clipboard">Отправить буфер обмена на удалённый ПК</string>
+    <string name="clipboard_sent">Буфер обмена отправлен на удалённый ПК</string>
+    <string name="clipboard_empty">Буфер обмена пуст</string>
+    <string name="clipboard_not_connected">Нет подключения к удалённому ПК</string>
 </resources>

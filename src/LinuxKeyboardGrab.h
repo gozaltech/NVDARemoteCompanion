@@ -13,6 +13,7 @@ public:
 
 protected:
     void OnExit() override;
+    void OnClipboardShortcut() override;
 };
 
 #endif

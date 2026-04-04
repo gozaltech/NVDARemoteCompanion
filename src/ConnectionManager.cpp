@@ -2,6 +2,7 @@
 #include "Debug.h"
 #include "Speech.h"
 #include "Audio.h"
+#include "Clipboard.h"
 #include "Config.h"
 #ifdef _WIN32
 #include "AppState.h"
@@ -103,6 +104,13 @@ void ConnectionManager::HandleIncomingMessage(std::string_view message) {
             DEBUG_VERBOSE_F("CONN", "Received speech: {}", speechText);
             if (self.ShouldPlaySpeech()) Speech::Speak(speechText, false);
         }},
+        {Config::MSG_TYPE_SET_CLIPBOARD_TEXT, [](ConnectionManager& self, const json& msg) {
+            std::string text = msg.value("text", "");
+            if (text.empty()) return;
+            DEBUG_INFO("CONN", "Received clipboard text from remote");
+            Clipboard::SetText(text);
+            if (self.ShouldPlaySpeech()) Speech::Speak("Clipboard received", false);
+        }},
     };
 
     auto messageType = j.value("type", "");
@@ -156,7 +164,6 @@ bool ConnectionManager::EstablishConnection(std::string_view host, int port, std
 
     m_wantsConnection = true;
 #ifndef ANDROID
-    // On Android, reconnects are managed by ConnectivityManager.NetworkCallback
     if (!m_reconnectThread.joinable()) {
         m_reconnectThread = std::thread(&ConnectionManager::ReconnectLoop, this);
     }
@@ -170,7 +177,6 @@ bool ConnectionManager::Reconnect() {
         DEBUG_ERROR("CONN", "Cannot reconnect - no connection parameters available");
         return false;
     }
-    // Disconnect without clearing m_wantsConnection so auto-reconnect stays armed
     if (m_client) m_client->Disconnect();
     m_protocolHandshakeComplete = false;
     return EstablishConnectionInternal();
@@ -259,7 +265,6 @@ void ConnectionManager::ReconnectLoop() {
             m_reconnectPending = false;
         }
 
-        // Retry until reconnected or explicit disconnect
         while (m_wantsConnection) {
             DEBUG_INFO_F("CONN", "Auto-reconnect: waiting 5s before retrying profile {}", m_profileIndex);
             {

@@ -54,6 +54,7 @@ private:
     void CmdDelete(const std::string& args);
     void CmdHelp();
     void CmdSave(const std::string& args);
+    void CmdClip();
     void CmdReinstallHook();
 
     int FindProfileIndex(const std::string& nameOrIndex);

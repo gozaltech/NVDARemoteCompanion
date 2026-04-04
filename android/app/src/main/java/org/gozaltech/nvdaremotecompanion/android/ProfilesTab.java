@@ -1,5 +1,8 @@
 package org.gozaltech.nvdaremotecompanion.android;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -8,6 +11,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -37,6 +41,12 @@ class ProfilesTab {
         addBtn.setOnClickListener(v ->
                 activity.startActivity(new Intent(activity, ProfileEditActivity.class)));
         content.addView(addBtn);
+
+        Button clipBtn = new Button(activity);
+        clipBtn.setText(R.string.send_clipboard);
+        clipBtn.setContentDescription(activity.getString(R.string.send_clipboard));
+        clipBtn.setOnClickListener(v -> sendClipboard());
+        content.addView(clipBtn);
 
         profilesContainer = new LinearLayout(activity);
         profilesContainer.setOrientation(LinearLayout.VERTICAL);
@@ -132,6 +142,9 @@ class ProfilesTab {
                         activity.getString(R.string.set_active_profile, p.displayName),
                         (v, a) -> { viewModel.setActiveProfile(p.index); return true; });
             }
+            ViewCompat.addAccessibilityAction(card,
+                    activity.getString(R.string.send_clipboard),
+                    (v, a) -> { sendClipboardToProfile(p.index); return true; });
         } else {
             ViewCompat.addAccessibilityAction(card,
                     activity.getString(R.string.connect_profile, p.displayName),
@@ -149,6 +162,32 @@ class ProfilesTab {
                 (v, a) -> { confirmDelete(p.index, p.displayName); return true; });
 
         return card;
+    }
+
+    private void sendClipboard() {
+        int activeProfile = NativeBridge.nativeGetActiveProfile();
+        if (activeProfile < 0) {
+            Toast.makeText(activity, R.string.clipboard_not_connected, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        sendClipboardToProfile(activeProfile);
+    }
+
+    private void sendClipboardToProfile(int profileIndex) {
+        ClipboardManager clipboard = (ClipboardManager)
+                activity.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null || !clipboard.hasPrimaryClip()) {
+            Toast.makeText(activity, R.string.clipboard_empty, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+        CharSequence text = item != null ? item.getText() : null;
+        if (text == null || text.length() == 0) {
+            Toast.makeText(activity, R.string.clipboard_empty, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        NativeBridge.nativeSendClipboardText(text.toString(), profileIndex);
+        Toast.makeText(activity, R.string.clipboard_sent, Toast.LENGTH_SHORT).show();
     }
 
     private void confirmDelete(int index, String name) {

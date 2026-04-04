@@ -22,6 +22,7 @@ ShortcutConfig KeyboardState::g_exitShortcut;
 ShortcutConfig KeyboardState::g_reinstallHookShortcut;
 ShortcutConfig KeyboardState::g_localShortcut;
 ShortcutConfig KeyboardState::g_reconnectShortcut;
+ShortcutConfig KeyboardState::g_clipboardShortcut;
 std::vector<PressedKey> KeyboardState::g_pressedKeyDetails;
 
 bool KeyboardState::IsControlKey(NativeKeyType vkCode) {
@@ -166,6 +167,14 @@ void KeyboardState::SetReconnectShortcut(const std::string& shortcut) {
 
 bool KeyboardState::CheckReconnectShortcut(NativeKeyType vkCode) {
     return CheckGlobalShortcut(g_reconnectShortcut, vkCode);
+}
+
+void KeyboardState::SetClipboardShortcut(const std::string& shortcut) {
+    ApplyGlobalShortcut(g_clipboardShortcut, shortcut, "Clipboard");
+}
+
+bool KeyboardState::CheckClipboardShortcut(NativeKeyType vkCode) {
+    return CheckGlobalShortcut(g_clipboardShortcut, vkCode);
 }
 
 static NativeKeyType ParseKey(const std::string& keyName) {

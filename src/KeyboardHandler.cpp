@@ -22,6 +22,11 @@ bool KeyboardHandler::HandleShortcut(uint32_t vkCode) {
         OnReinstallHook();
         return true;
     }
+    if (KeyboardState::CheckClipboardShortcut(vkCode)) {
+        KeyboardState::ResetModifiers();
+        OnClipboardShortcut();
+        return true;
+    }
     if (KeyboardState::CheckLocalShortcut(vkCode)) {
         KeyboardState::ResetModifiers();
         AppState::GoLocal();

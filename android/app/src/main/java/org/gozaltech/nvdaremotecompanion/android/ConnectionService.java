@@ -105,6 +105,7 @@ public class ConnectionService extends Service {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NVDARemote:connection");
 
+        NativeBridge.setAppContext(this);
         NativeBridge.nativeInit(ttsManager, audioManager, getFilesDir().getAbsolutePath());
         initialized = true;
         Log.i(TAG, "ConnectionService created, native initialized");

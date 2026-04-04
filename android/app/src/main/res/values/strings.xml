@@ -118,4 +118,9 @@
     <string name="update_error">Could not check for updates. Please try again later.</string>
     <string name="update_signature_mismatch">Update rejected: the downloaded file\'s certificate does not match the installed app.</string>
     <string name="update_install_failed">Update installation failed: %s</string>
+
+    <string name="send_clipboard">Send Clipboard to Remote</string>
+    <string name="clipboard_sent">Clipboard sent to remote</string>
+    <string name="clipboard_empty">Clipboard is empty</string>
+    <string name="clipboard_not_connected">Not connected to any remote</string>
 </resources>

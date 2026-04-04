@@ -1,5 +1,10 @@
 package org.gozaltech.nvdaremotecompanion.android;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.annotation.Keep;
 
 import java.util.Collections;
@@ -11,6 +16,12 @@ public class NativeBridge {
 
     static {
         System.loadLibrary("nvdaremote");
+    }
+
+    private static Context appContext;
+
+    public static void setAppContext(Context context) {
+        appContext = context.getApplicationContext();
     }
 
     public interface ConnectionStateListener {
@@ -90,4 +101,34 @@ public class NativeBridge {
 
     public static native void nativeSetActiveProfile(int profileIndex);
     public static native int nativeGetActiveProfile();
+
+    public static native void nativeSendClipboardText(String text, int profileIndex);
+
+    @Keep
+    public static void onClipboardShortcutTriggered() {
+        if (appContext == null) return;
+        new Handler(Looper.getMainLooper()).post(() -> {
+            int activeProfile = nativeGetActiveProfile();
+            if (activeProfile < 0) return;
+            ClipboardManager clipboard = (ClipboardManager)
+                    appContext.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) return;
+            ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+            CharSequence text = item != null ? item.getText() : null;
+            if (text == null || text.length() == 0) return;
+            nativeSendClipboardText(text.toString(), activeProfile);
+        });
+    }
+
+    @Keep
+    public static void onClipboardTextReceived(final String text) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (appContext == null) return;
+            ClipboardManager clipboard = (ClipboardManager)
+                    appContext.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("NVDARemote", text));
+            }
+        });
+    }
 }

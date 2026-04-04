@@ -2,14 +2,14 @@
 #include "Config.h"
 #include "Debug.h"
 #include "Input.h"
+#include "Clipboard.h"
+#include "MessageSender.h"
+#include "KeyboardState.h"
+#include "AppState.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>
-
-#include "MessageSender.h"
-#include "KeyboardState.h"
-#include "AppState.h"
 #ifdef _WIN32
 #include "KeyboardHook.h"
 #include <windows.h>
@@ -339,6 +339,7 @@ void CommandHandler::HandleCommand(const std::string& line) {
         {{"edit"},                      [](CommandHandler& h, const std::string& a){ h.CmdEdit(a); }},
         {{"delete", "rm"},              [](CommandHandler& h, const std::string& a){ h.CmdDelete(a); }},
         {{"save"},                      [](CommandHandler& h, const std::string& a){ h.CmdSave(a); }},
+        {{"clip"},                      [](CommandHandler& h, const std::string&)  { h.CmdClip(); }},
         {{"help", "?"},                 [](CommandHandler& h, const std::string&)  { h.CmdHelp(); }},
 #ifdef _WIN32
         {{"reinstall-hook", "hook"},    [](CommandHandler& h, const std::string&)  { h.CmdReinstallHook(); }},
@@ -689,6 +690,7 @@ void CommandHandler::CmdHelp() {
     std::cout << "                      Edit a profile field" << std::endl;
     std::cout << "  delete (rm) <name|idx>  Delete a profile" << std::endl;
     std::cout << "  save [name|idx]         Save current interactive connection as a profile" << std::endl;
+    std::cout << "  clip                    Send local clipboard text to the active remote" << std::endl;
 #ifdef _WIN32
     std::cout << "  reinstall-hook (hook)  Reinstall keyboard hook (fixes NVDA modifier after NVDA restart)" << std::endl;
 #endif
@@ -741,6 +743,20 @@ void CommandHandler::CmdSave(const std::string& args) {
     m_configData.profiles.push_back(p);
     SaveConfig();
     std::cout << "Session saved as profile [" << (Config::isize(m_configData.profiles) - 1) << "] '" << p.name << "'" << std::endl;
+}
+
+void CommandHandler::CmdClip() {
+    if (!HasAnyConnected()) {
+        std::cout << "Not connected to any profile." << std::endl;
+        return;
+    }
+    std::string text = Clipboard::GetText();
+    if (text.empty()) {
+        std::cout << "Clipboard is empty." << std::endl;
+        return;
+    }
+    MessageSender::SendClipboardText(text);
+    std::cout << "Clipboard sent to remote." << std::endl;
 }
 
 void CommandHandler::CmdReinstallHook() {
