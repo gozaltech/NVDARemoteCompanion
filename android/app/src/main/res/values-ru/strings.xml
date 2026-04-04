@@ -24,8 +24,7 @@
     <string name="connect">Подключить</string>
     <string name="disconnect">Отключить</string>
     <string name="set_active">Сделать активным</string>
-    <string name="go_local">Локальный режим</string>
-    <string name="edit">Изменить</string>
+<string name="edit">Изменить</string>
     <string name="save">Сохранить</string>
     <string name="delete_profile">Удалить профиль</string>
 
@@ -120,6 +119,7 @@
     <string name="update_signature_mismatch">Обновление отклонено: сертификат загруженного файла не совпадает с установленным приложением.</string>
     <string name="update_install_failed">Ошибка установки обновления: %s</string>
 
+    <string name="send_keys">Отправлять нажатия клавиш на удалённый ПК</string>
     <string name="send_clipboard">Отправить буфер обмена на удалённый ПК</string>
     <string name="clipboard_sent">Буфер обмена отправлен на удалённый ПК</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>

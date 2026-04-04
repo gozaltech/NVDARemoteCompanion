@@ -7,13 +7,15 @@
 #include "Config.h"
 
 int AppState::g_activeProfile = -1;
+bool AppState::g_forwardingKeys = false;
 bool AppState::g_releasingKeys = false;
 std::vector<int> AppState::g_connectedProfiles;
 std::vector<std::string> AppState::g_profileNames;
 
 bool AppState::IsSendingKeys() {
-    return g_activeProfile >= 0;
+    return g_forwardingKeys && g_activeProfile >= 0;
 }
+
 
 void AppState::ReleaseAllKeys() {
     g_releasingKeys = true;
@@ -26,35 +28,48 @@ void AppState::ReleaseAllKeys() {
     g_releasingKeys = false;
 }
 
-void AppState::AnnounceLocal() {
-    g_activeProfile = -1;
-    Audio::PlayTone(440, 100);
-    Speech::Speak("Local", true);
-}
-
-void AppState::ToggleSendingKeys(int profileIndex) {
-    if (g_activeProfile == profileIndex) {
-        ReleaseAllKeys();
-        AnnounceLocal();
-    } else {
-        if (g_activeProfile >= 0) {
-            ReleaseAllKeys();
-        }
-        g_activeProfile = profileIndex;
-        MessageSender::SetActiveProfile(profileIndex);
-        Audio::PlayTone(880, 100);
-        for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
-            if (g_connectedProfiles[i] == profileIndex && i < Config::isize(g_profileNames)) {
-                Speech::Speak(g_profileNames[i], true);
-                break;
-            }
+void AppState::AnnounceProfile(int profileIndex) {
+    Audio::PlayTone(880, 100);
+    for (int i = 0; i < Config::isize(g_connectedProfiles); i++) {
+        if (g_connectedProfiles[i] == profileIndex && i < Config::isize(g_profileNames)) {
+            Speech::Speak(g_profileNames[i], true);
+            return;
         }
     }
 }
 
+void AppState::SetActiveProfile(int profileIndex) {
+    if (g_forwardingKeys && g_activeProfile >= 0) {
+        ReleaseAllKeys();
+        g_forwardingKeys = false;
+    }
+    g_activeProfile = profileIndex;
+    MessageSender::SetActiveProfile(profileIndex);
+    AnnounceProfile(profileIndex);
+}
+
+void AppState::ToggleForwarding() {
+    if (g_activeProfile < 0) {
+        if (g_connectedProfiles.empty()) return;
+        g_activeProfile = g_connectedProfiles[0];
+        MessageSender::SetActiveProfile(g_activeProfile);
+    }
+
+    if (g_forwardingKeys) {
+        ReleaseAllKeys();
+        g_forwardingKeys = false;
+    } else {
+        g_forwardingKeys = true;
+        AnnounceProfile(g_activeProfile);
+    }
+}
+
 void AppState::CycleProfile() {
-    if (g_connectedProfiles.empty()) {
-        return;
+    if (g_connectedProfiles.empty()) return;
+
+    if (g_forwardingKeys) {
+        ReleaseAllKeys();
+        g_forwardingKeys = false;
     }
 
     int currentIdx = -1;
@@ -67,21 +82,10 @@ void AppState::CycleProfile() {
         }
     }
 
-    if (g_activeProfile >= 0) {
-        ReleaseAllKeys();
-    }
-
-    int nextIdx = currentIdx + 1;
-    if (nextIdx >= Config::isize(g_connectedProfiles)) {
-        AnnounceLocal();
-    } else {
-        g_activeProfile = g_connectedProfiles[nextIdx];
-        MessageSender::SetActiveProfile(g_activeProfile);
-        Audio::PlayTone(880, 100);
-        if (nextIdx < Config::isize(g_profileNames)) {
-            Speech::Speak(g_profileNames[nextIdx], true);
-        }
-    }
+    int nextIdx = (currentIdx + 1) % Config::isize(g_connectedProfiles);
+    g_activeProfile = g_connectedProfiles[nextIdx];
+    MessageSender::SetActiveProfile(g_activeProfile);
+    AnnounceProfile(g_activeProfile);
 }
 
 void AppState::SetConnectedProfiles(const std::vector<int>& indices, const std::vector<std::string>& names) {
@@ -97,9 +101,3 @@ int AppState::GetActiveProfile() {
     return g_activeProfile;
 }
 
-void AppState::GoLocal() {
-    if (g_activeProfile >= 0) {
-        ReleaseAllKeys();
-        AnnounceLocal();
-    }
-}

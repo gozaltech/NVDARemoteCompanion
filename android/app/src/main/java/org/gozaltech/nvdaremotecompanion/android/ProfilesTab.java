@@ -7,9 +7,11 @@ import android.content.Intent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -41,6 +43,14 @@ class ProfilesTab {
         addBtn.setOnClickListener(v ->
                 activity.startActivity(new Intent(activity, ProfileEditActivity.class)));
         content.addView(addBtn);
+
+        Switch sendKeysSwitch = new Switch(activity);
+        sendKeysSwitch.setText(R.string.send_keys);
+        sendKeysSwitch.setOnCheckedChangeListener((btn, checked) -> {
+            if (checked != NativeBridge.nativeIsSendingKeys()) viewModel.toggleForwarding();
+        });
+        viewModel.getSendingKeys().observe(activity, sendKeysSwitch::setChecked);
+        content.addView(sendKeysSwitch);
 
         Button clipBtn = new Button(activity);
         clipBtn.setText(R.string.send_clipboard);
@@ -111,13 +121,10 @@ class ProfilesTab {
         });
         buttonRow.addView(connectBtn);
 
-        if (p.connected) {
+        if (p.connected && !p.active) {
             Button activeBtn = new Button(activity);
-            activeBtn.setText(p.active ? R.string.go_local : R.string.set_active);
-            activeBtn.setOnClickListener(v -> {
-                if (p.active) viewModel.goLocal();
-                else viewModel.setActiveProfile(p.index);
-            });
+            activeBtn.setText(R.string.set_active);
+            activeBtn.setOnClickListener(v -> viewModel.setActiveProfile(p.index));
             buttonRow.addView(activeBtn);
         }
 
@@ -133,11 +140,7 @@ class ProfilesTab {
             ViewCompat.addAccessibilityAction(card,
                     activity.getString(R.string.disconnect_profile, p.displayName),
                     (v, a) -> { viewModel.disconnect(p.index); return true; });
-            if (p.active) {
-                ViewCompat.addAccessibilityAction(card,
-                        activity.getString(R.string.go_local),
-                        (v, a) -> { viewModel.goLocal(); return true; });
-            } else {
+            if (!p.active) {
                 ViewCompat.addAccessibilityAction(card,
                         activity.getString(R.string.set_active_profile, p.displayName),
                         (v, a) -> { viewModel.setActiveProfile(p.index); return true; });

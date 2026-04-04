@@ -142,14 +142,14 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeInit(
         std::string cycleSc = g_config.cycleShortcut.value_or("ctrl+alt+f11");
         KeyboardState::SetCycleShortcut(cycleSc);
 
-        std::string localSc = g_config.localShortcut.value_or("");
-        if (!localSc.empty()) KeyboardState::SetLocalShortcut(localSc);
-
-        std::string reconnectSc = g_config.reconnectShortcut.value_or("");
+std::string reconnectSc = g_config.reconnectShortcut.value_or("");
         if (!reconnectSc.empty()) KeyboardState::SetReconnectShortcut(reconnectSc);
 
         std::string clipboardSc = g_config.clipboardShortcut.value_or("");
         if (!clipboardSc.empty()) KeyboardState::SetClipboardShortcut(clipboardSc);
+
+        std::string fwSc = g_config.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
+        if (!fwSc.empty()) KeyboardState::SetForwardKeysShortcut(fwSc);
 
         for (int i = 0; i < static_cast<int>(g_config.profiles.size()); i++) {
             if (!g_config.profiles[i].shortcut.empty())
@@ -340,12 +340,14 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeSetActiveProfi
         JNIEnv*, jobject,
         jint profileIndex) {
 
-    int idx = static_cast<int>(profileIndex);
-    if (idx == -1) {
-        AppState::GoLocal();
-    } else {
-        AppState::ToggleSendingKeys(idx);
-    }
+    AppState::SetActiveProfile(static_cast<int>(profileIndex));
+}
+
+JNIEXPORT void JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeToggleForwarding(
+        JNIEnv*, jobject) {
+
+    AppState::ToggleForwarding();
 }
 
 JNIEXPORT jboolean JNICALL
@@ -360,20 +362,23 @@ Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeProcessModifie
 
     if (!prs) return JNI_FALSE;
 
+    if (KeyboardState::CheckForwardKeysShortcut(vk)) {
+        KeyboardState::ResetModifiers();
+        AppState::ToggleForwarding();
+        return JNI_TRUE;
+    }
+
+    if (AppState::IsSendingKeys()) return JNI_FALSE;
+
     if (KeyboardState::CheckCycleShortcut(vk)) {
         KeyboardState::ResetModifiers();
         AppState::CycleProfile();
         return JNI_TRUE;
     }
-    if (KeyboardState::CheckLocalShortcut(vk)) {
-        KeyboardState::ResetModifiers();
-        AppState::GoLocal();
-        return JNI_TRUE;
-    }
     int toggleIdx = KeyboardState::CheckToggleShortcut(vk);
     if (toggleIdx >= 0) {
         KeyboardState::ResetModifiers();
-        AppState::ToggleSendingKeys(toggleIdx);
+        AppState::SetActiveProfile(toggleIdx);
         return JNI_TRUE;
     }
     if (KeyboardState::CheckClipboardShortcut(vk)) {
@@ -406,6 +411,12 @@ JNIEXPORT jint JNICALL
 Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeGetActiveProfile(
         JNIEnv*, jobject) {
     return static_cast<jint>(AppState::GetActiveProfile());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_gozaltech_nvdaremotecompanion_android_NativeBridge_nativeIsSendingKeys(
+        JNIEnv*, jobject) {
+    return AppState::IsSendingKeys() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

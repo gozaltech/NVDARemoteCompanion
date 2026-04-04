@@ -528,12 +528,14 @@ int main(int argc, char* argv[]) {
 
         if (cfg.exitShortcut && !cfg.exitShortcut->empty())
             KeyboardState::SetExitShortcut(*cfg.exitShortcut);
-        if (cfg.localShortcut && !cfg.localShortcut->empty())
-            KeyboardState::SetLocalShortcut(*cfg.localShortcut);
-        if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
+if (cfg.reconnectShortcut && !cfg.reconnectShortcut->empty())
             KeyboardState::SetReconnectShortcut(*cfg.reconnectShortcut);
         if (cfg.clipboardShortcut && !cfg.clipboardShortcut->empty())
             KeyboardState::SetClipboardShortcut(*cfg.clipboardShortcut);
+        {
+            std::string fwSc = cfg.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
+            if (!fwSc.empty()) KeyboardState::SetForwardKeysShortcut(fwSc);
+        }
 #ifdef _WIN32
         if (cfg.reinstallHookShortcut && !cfg.reinstallHookShortcut->empty())
             KeyboardState::SetReinstallHookShortcut(*cfg.reinstallHookShortcut);

@@ -106,7 +106,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
         }
 
         int activeProfile = NativeBridge.nativeGetActiveProfile();
-        if (activeProfile < 0) return false;
+        if (activeProfile < 0 || !NativeBridge.nativeIsSendingKeys()) return false;
 
         if (pressed && !isRepeat) {
             stopRepeat();
@@ -124,7 +124,7 @@ public class NvdaRemoteAccessibilityService extends AccessibilityService {
             @Override
             public void run() {
                 int current = NativeBridge.nativeGetActiveProfile();
-                if (current == profileIndex) {
+                if (current == profileIndex && NativeBridge.nativeIsSendingKeys()) {
                     NativeBridge.nativeSendKeyEvent(
                             winKey.vk, winKey.scan, true, winKey.extended, profileIndex
                     );

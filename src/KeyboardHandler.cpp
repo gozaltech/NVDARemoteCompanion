@@ -12,6 +12,14 @@ void KeyboardHandler::SetReconnectCallback(std::function<void()> callback) {
 }
 
 bool KeyboardHandler::HandleShortcut(uint32_t vkCode) {
+    if (KeyboardState::CheckForwardKeysShortcut(vkCode)) {
+        KeyboardState::ResetModifiers();
+        AppState::ToggleForwarding();
+        return true;
+    }
+
+    if (AppState::IsSendingKeys()) return false;
+
     if (KeyboardState::CheckExitShortcut(vkCode)) {
         KeyboardState::ResetModifiers();
         OnExit();
@@ -27,12 +35,7 @@ bool KeyboardHandler::HandleShortcut(uint32_t vkCode) {
         OnClipboardShortcut();
         return true;
     }
-    if (KeyboardState::CheckLocalShortcut(vkCode)) {
-        KeyboardState::ResetModifiers();
-        AppState::GoLocal();
-        return true;
-    }
-    if (KeyboardState::CheckReconnectShortcut(vkCode)) {
+if (KeyboardState::CheckReconnectShortcut(vkCode)) {
         KeyboardState::ResetModifiers();
         if (m_reconnectCallback) m_reconnectCallback();
         return true;
@@ -45,7 +48,7 @@ bool KeyboardHandler::HandleShortcut(uint32_t vkCode) {
     int profileIndex = KeyboardState::CheckToggleShortcut(vkCode);
     if (profileIndex >= 0) {
         KeyboardState::ResetModifiers();
-        AppState::ToggleSendingKeys(profileIndex);
+        AppState::SetActiveProfile(profileIndex);
         return true;
     }
     return false;

@@ -24,9 +24,10 @@ public class MainViewModel extends AndroidViewModel {
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    private final MutableLiveData<List<ProfileUiState>> profilesLive = new MutableLiveData<>();
-    private final MutableLiveData<String>               statusLive   = new MutableLiveData<>();
-    private final MutableLiveData<Event<Integer>>       toastLive    = new MutableLiveData<>();
+    private final MutableLiveData<List<ProfileUiState>> profilesLive    = new MutableLiveData<>();
+    private final MutableLiveData<String>               statusLive      = new MutableLiveData<>();
+    private final MutableLiveData<Event<Integer>>       toastLive       = new MutableLiveData<>();
+    private final MutableLiveData<Boolean>              sendingKeysLive = new MutableLiveData<>(false);
 
     private ConnectionService connectionService;
 
@@ -44,9 +45,10 @@ public class MainViewModel extends AndroidViewModel {
         executor.shutdownNow();
     }
 
-    public LiveData<List<ProfileUiState>> getProfiles()     { return profilesLive; }
+    public LiveData<List<ProfileUiState>> getProfiles()       { return profilesLive; }
     public LiveData<String>               getStatusSubtitle() { return statusLive; }
-    public LiveData<Event<Integer>>       getToast()        { return toastLive; }
+    public LiveData<Event<Integer>>       getToast()          { return toastLive; }
+    public LiveData<Boolean>              getSendingKeys()    { return sendingKeysLive; }
 
     public void onServiceConnected(ConnectionService svc) {
         connectionService = svc;
@@ -75,11 +77,12 @@ public class MainViewModel extends AndroidViewModel {
         if (connectionService != null) connectionService.setActiveProfile(index);
     }
 
-    public void goLocal() {
-        if (connectionService != null) connectionService.goLocal();
+    public void toggleForwarding() {
+        if (connectionService != null) connectionService.toggleForwarding();
+        sendingKeysLive.postValue(NativeBridge.nativeIsSendingKeys());
     }
 
-    public void deleteProfile(int index) {
+public void deleteProfile(int index) {
         if (connectionService != null) connectionService.deleteProfile(index);
     }
 
@@ -161,6 +164,7 @@ public class MainViewModel extends AndroidViewModel {
             list.add(new ProfileUiState(i, displayName, NativeBridge.nativeIsConnected(i), activeProfile == i));
         }
         profilesLive.postValue(list);
+        sendingKeysLive.postValue(NativeBridge.nativeIsSendingKeys());
 
         String status = activeProfile >= 0
                 ? getApplication().getString(R.string.status_sending_to,

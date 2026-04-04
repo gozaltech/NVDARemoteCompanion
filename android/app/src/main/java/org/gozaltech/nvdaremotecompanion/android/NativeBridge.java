@@ -101,6 +101,8 @@ public class NativeBridge {
 
     public static native void nativeSetActiveProfile(int profileIndex);
     public static native int nativeGetActiveProfile();
+    public static native boolean nativeIsSendingKeys();
+    public static native void nativeToggleForwarding();
 
     public static native void nativeSendClipboardText(String text, int profileIndex);
 

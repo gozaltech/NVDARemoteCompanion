@@ -169,7 +169,7 @@ public class ConnectionService extends Service {
     }
 
     public void setActiveProfile(int profileIndex) { NativeBridge.nativeSetActiveProfile(profileIndex); }
-    public void goLocal()                          { NativeBridge.nativeSetActiveProfile(-1); }
+    public void toggleForwarding()                 { NativeBridge.nativeToggleForwarding(); }
     public boolean isConnected(int profileIndex)   { return NativeBridge.nativeIsConnected(profileIndex); }
     public int getProfileCount()                   { return NativeBridge.nativeGetProfileCount(); }
     public String getProfileName(int profileIndex) { return NativeBridge.nativeGetProfileName(profileIndex); }

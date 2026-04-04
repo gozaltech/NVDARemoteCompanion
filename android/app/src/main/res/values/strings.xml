@@ -23,8 +23,7 @@
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
     <string name="set_active">Set Active</string>
-    <string name="go_local">Go Local</string>
-    <string name="edit">Edit</string>
+<string name="edit">Edit</string>
     <string name="save">Save</string>
     <string name="delete_profile">Delete Profile</string>
 
@@ -119,6 +118,7 @@
     <string name="update_signature_mismatch">Update rejected: the downloaded file\'s certificate does not match the installed app.</string>
     <string name="update_install_failed">Update installation failed: %s</string>
 
+    <string name="send_keys">Send Keys to Remote</string>
     <string name="send_clipboard">Send Clipboard to Remote</string>
     <string name="clipboard_sent">Clipboard sent to remote</string>
     <string name="clipboard_empty">Clipboard is empty</string>

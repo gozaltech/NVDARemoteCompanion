@@ -123,9 +123,9 @@ private:
     static ShortcutConfig g_cycleShortcut;
     static ShortcutConfig g_exitShortcut;
     static ShortcutConfig g_reinstallHookShortcut;
-    static ShortcutConfig g_localShortcut;
-    static ShortcutConfig g_reconnectShortcut;
+static ShortcutConfig g_reconnectShortcut;
     static ShortcutConfig g_clipboardShortcut;
+    static ShortcutConfig g_forwardKeysShortcut;
 
     static void ApplyGlobalShortcut(ShortcutConfig& sc, const std::string& shortcut, const char* name);
     static bool CheckGlobalShortcut(const ShortcutConfig& sc, NativeKeyType vkCode);
@@ -145,12 +145,12 @@ public:
     static void SetReinstallHookShortcut(const std::string& shortcut);
     static bool CheckExitShortcut(NativeKeyType vkCode);
     static bool CheckReinstallHookShortcut(NativeKeyType vkCode);
-    static void SetLocalShortcut(const std::string& shortcut);
-    static bool CheckLocalShortcut(NativeKeyType vkCode);
-    static void SetReconnectShortcut(const std::string& shortcut);
+static void SetReconnectShortcut(const std::string& shortcut);
     static bool CheckReconnectShortcut(NativeKeyType vkCode);
     static void SetClipboardShortcut(const std::string& shortcut);
     static bool CheckClipboardShortcut(NativeKeyType vkCode);
+    static void SetForwardKeysShortcut(const std::string& shortcut);
+    static bool CheckForwardKeysShortcut(NativeKeyType vkCode);
 
 
     static void SetToggleShortcut(const std::string& shortcut);

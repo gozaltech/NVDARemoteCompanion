@@ -7,9 +7,11 @@
 namespace Config {
 
 #ifdef _WIN32
-    constexpr const char* DEFAULT_CYCLE_SHORTCUT = "ctrl+alt+f11";
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT       = "ctrl+alt+f11";
+    constexpr const char* DEFAULT_FORWARD_KEYS_SHORTCUT = "ctrl+alt+f12";
 #else
-    constexpr const char* DEFAULT_CYCLE_SHORTCUT = "ctrl+shift+f11";
+    constexpr const char* DEFAULT_CYCLE_SHORTCUT       = "ctrl+shift+f11";
+    constexpr const char* DEFAULT_FORWARD_KEYS_SHORTCUT = "ctrl+shift+f12";
 #endif
 
     constexpr int DEFAULT_PORT = 6837;

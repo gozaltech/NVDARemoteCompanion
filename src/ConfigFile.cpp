@@ -177,9 +177,9 @@ ConfigFileData ConfigFile::Load(const std::string& path) {
             ReadJson(sc, "cycle",          data.cycleShortcut);
             ReadJson(sc, "exit",           data.exitShortcut);
             ReadJson(sc, "reinstall_hook", data.reinstallHookShortcut);
-            ReadJson(sc, "local",          data.localShortcut);
-            ReadJson(sc, "reconnect",      data.reconnectShortcut);
+ReadJson(sc, "reconnect",      data.reconnectShortcut);
             ReadJson(sc, "clipboard",      data.clipboardShortcut);
+            ReadJson(sc, "forward_keys",   data.forwardKeysShortcut);
         }
 
         if (j.contains("profiles") && j["profiles"].is_array()) {
@@ -240,11 +240,11 @@ bool ConfigFile::CreateDefault(const std::string& path) {
         {"audio",          true},
         {"shortcuts", nlohmann::ordered_json({
             {"cycle",          Config::DEFAULT_CYCLE_SHORTCUT},
-            {"local",          ""},
-            {"exit",           ""},
+{"exit",           ""},
             {"reinstall_hook", ""},
             {"reconnect",      ""},
-            {"clipboard",      ""}
+            {"clipboard",      ""},
+            {"forward_keys",   Config::DEFAULT_FORWARD_KEYS_SHORTCUT}
         })},
         {"profiles", nlohmann::ordered_json::array({profile})}
     };
@@ -268,9 +268,9 @@ bool ConfigFile::Save(const std::string& path, const ConfigFileData& data) {
         sc["cycle"] = data.cycleShortcut.value_or(Config::DEFAULT_CYCLE_SHORTCUT);
         if (data.exitShortcut)           sc["exit"]           = *data.exitShortcut;
         if (data.reinstallHookShortcut)  sc["reinstall_hook"] = *data.reinstallHookShortcut;
-        if (data.localShortcut)          sc["local"]          = *data.localShortcut;
-        if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
+if (data.reconnectShortcut)      sc["reconnect"]      = *data.reconnectShortcut;
         if (data.clipboardShortcut)      sc["clipboard"]      = *data.clipboardShortcut;
+        sc["forward_keys"] = data.forwardKeysShortcut.value_or(Config::DEFAULT_FORWARD_KEYS_SHORTCUT);
         j["shortcuts"] = std::move(sc);
     }
 
