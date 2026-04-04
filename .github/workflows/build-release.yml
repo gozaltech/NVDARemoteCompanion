@@ -164,7 +164,7 @@ jobs:
         else
           RANGE="${CURRENT_TAG}"
         fi
-        NOTES=$(git log "$RANGE" --pretty=format:"- %s" --no-merges)
+        NOTES=$(git log "$RANGE" --pretty=format:"- %B%n---" --no-merges)
         {
           echo "body<<EOF"
           echo "$NOTES"
