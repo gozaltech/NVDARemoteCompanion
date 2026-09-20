@@ -5,3 +5,7 @@
 app/build
 *.iml
 *.jks
+*.log
+hs_err_pid*
+replay_pid*
+/.cxx

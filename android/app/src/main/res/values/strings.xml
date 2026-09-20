@@ -14,7 +14,6 @@
     <string name="status_active_profile">Active: %s</string>
     <string name="status_sending_to">Sending keys to: %s</string>
 
-    <string name="profiles_list">Profiles</string>
     <string name="no_profiles">No profiles configured. Tap Add Profile to create one.</string>
     <string name="profile_connected">Connected</string>
     <string name="profile_disconnected">Disconnected</string>
@@ -22,10 +21,6 @@
     <string name="profile_sending_keys">Active — sending keys</string>
 
     <string name="add_profile">Add Profile</string>
-    <string name="connect">Connect</string>
-    <string name="disconnect">Disconnect</string>
-    <string name="set_active">Set Active</string>
-<string name="edit">Edit</string>
     <string name="save">Save</string>
     <string name="delete_profile">Delete Profile</string>
 
@@ -52,6 +47,9 @@
     <string name="accessibility_dialog_title">Enable Keyboard Capture</string>
     <string name="accessibility_dialog_message">NVDA Remote Companion needs the Accessibility Service enabled to capture physical keyboard events and forward them to the remote PC. On the next screen, find \"NVDA Remote Companion\" and enable it.</string>
     <string name="open_settings">Open Settings</string>
+    <string name="keyboard_capture_limited_title">Keyboard capture is limited</string>
+    <string name="keyboard_capture_limited_message">The accessibility service is not enabled, so keys are only forwarded while this app is open and in the foreground. Enable it to forward keys from any app.</string>
+    <string name="continue_anyway">Continue anyway</string>
 
     <string name="tab_profiles">Profiles</string>
     <string name="tab_settings">Settings</string>
@@ -64,6 +62,12 @@
     <string name="tts_engine">Text-to-speech Engine</string>
     <string name="select_tts_engine">Select Text-to-speech Engine</string>
     <string name="tts_engine_default">System Default</string>
+
+    <string name="appearance_header">Appearance</string>
+    <string name="pref_theme">Theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
 
     <string name="speech_output_header">Speech output</string>
     <string name="speech_mode_tts">Text-to-speech</string>
@@ -99,14 +103,12 @@
     <string name="error_loading_profile">Could not load profile</string>
     <string name="error_saving_profile">Could not save profile</string>
     <string name="error_host_key_required">Server address and key are required</string>
-    <string name="error_connect_failed">Failed to connect to %s</string>
     <string name="error_connect_failed_generic">Failed to connect</string>
 
     <string name="update_check">Check for Updates</string>
     <string name="update_checking">Checking for updates…</string>
     <string name="update_up_to_date">You are on the latest version.</string>
     <string name="update_available_title">Update available</string>
-    <string name="update_available">Update available: v%s</string>
     <string name="update_version_line">Current: %1$s  →  New: %2$s</string>
     <string name="update_changelog">What\'s new</string>
     <string name="update_no_changelog">No release notes available.</string>
