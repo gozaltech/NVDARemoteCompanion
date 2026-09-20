@@ -44,6 +44,7 @@
 
     <string name="accessibility_service_description">Captures physical keyboard events and forwards them to the remote PC running NVDA.</string>
     <string name="enable_accessibility_service">Enable Keyboard Capture (Accessibility Service)</string>
+    <string name="accessibility_service_already_enabled">Keyboard capture is already enabled</string>
     <string name="accessibility_dialog_title">Enable Keyboard Capture</string>
     <string name="accessibility_dialog_message">NVDA Remote Companion needs the Accessibility Service enabled to capture physical keyboard events and forward them to the remote PC. On the next screen, find \"NVDA Remote Companion\" and enable it.</string>
     <string name="open_settings">Open Settings</string>
@@ -92,6 +93,7 @@
     <string name="battery_optimization">Disable Battery Optimization</string>
     <string name="battery_optimization_already_exempt">Battery optimization is already disabled</string>
 
+    <string name="configuration_header">Configuration</string>
     <string name="export_config">Export Configuration</string>
     <string name="import_config">Import Configuration</string>
     <string name="export_success">Configuration exported</string>

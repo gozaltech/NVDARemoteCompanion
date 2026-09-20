@@ -75,8 +75,10 @@ fun LabeledSlider(
 }
 
 @Composable
-fun OutlinedActionButton(text: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(text) }
+fun OutlinedActionButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+        Text(text)
+    }
 }
 
 @Composable
