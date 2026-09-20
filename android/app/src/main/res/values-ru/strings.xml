@@ -45,6 +45,7 @@
 
     <string name="accessibility_service_description">Перехватывает нажатия физических клавиш и перенаправляет их на удалённый компьютер с NVDA.</string>
     <string name="enable_accessibility_service">Включить захват клавиатуры (служба доступности)</string>
+    <string name="accessibility_service_already_enabled">Захват клавиатуры уже включён</string>
     <string name="accessibility_dialog_title">Включить захват клавиатуры</string>
     <string name="accessibility_dialog_message">NVDA Remote Companion требует включения службы доступности для перехвата нажатий физических клавиш и их перенаправления на удалённый ПК. На следующем экране найдите «NVDA Remote Companion» и включите службу.</string>
     <string name="open_settings">Открыть настройки</string>
@@ -85,6 +86,7 @@
     <string name="battery_optimization">Отключить оптимизацию батареи</string>
     <string name="battery_optimization_already_exempt">Оптимизация батареи уже отключена</string>
 
+    <string name="configuration_header">Конфигурация</string>
     <string name="export_config">Экспорт конфигурации</string>
     <string name="import_config">Импорт конфигурации</string>
     <string name="export_success">Конфигурация экспортирована</string>

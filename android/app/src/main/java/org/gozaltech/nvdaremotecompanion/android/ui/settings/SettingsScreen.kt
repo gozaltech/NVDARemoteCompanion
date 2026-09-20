@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import org.gozaltech.nvdaremotecompanion.android.R
@@ -38,6 +39,8 @@ import org.gozaltech.nvdaremotecompanion.android.data.AppLocales
 import org.gozaltech.nvdaremotecompanion.android.data.AppSettings
 import org.gozaltech.nvdaremotecompanion.android.data.SpeechMode
 import org.gozaltech.nvdaremotecompanion.android.data.ThemeMode
+import org.gozaltech.nvdaremotecompanion.android.service.AccessibilityServiceStatus
+import org.gozaltech.nvdaremotecompanion.android.speech.TtsEngine
 import org.gozaltech.nvdaremotecompanion.android.ui.MainViewModel
 import org.gozaltech.nvdaremotecompanion.android.ui.common.ChoiceRow
 import org.gozaltech.nvdaremotecompanion.android.ui.common.LabeledSlider
@@ -45,6 +48,7 @@ import org.gozaltech.nvdaremotecompanion.android.ui.common.OutlinedActionButton
 import org.gozaltech.nvdaremotecompanion.android.ui.common.SectionHeader
 import org.gozaltech.nvdaremotecompanion.android.ui.common.SwitchRow
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 private const val EXPORT_FILE_NAME = "nvdaremote_config.json"
 private val ImportMimeTypes = arrayOf("application/json", "application/octet-stream", "*/*")
@@ -56,6 +60,9 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val accessibilityStatus: AccessibilityServiceStatus = koinInject()
+    val accessibilityEnabled = systemGrantedState { accessibilityStatus.isEnabled() }
+    val batteryExempt = systemGrantedState { isIgnoringBatteryOptimizations(context) }
 
     var showAccessibilityDialog by remember { mutableStateOf(false) }
     var showEnginePicker by remember { mutableStateOf(false) }
@@ -79,11 +86,27 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(onClick = { showAccessibilityDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.enable_accessibility_service))
+        Button(
+            onClick = { showAccessibilityDialog = true },
+            enabled = !accessibilityEnabled,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (accessibilityEnabled) {
+                    stringResource(R.string.accessibility_service_already_enabled)
+                } else {
+                    stringResource(R.string.enable_accessibility_service)
+                }
+            )
         }
         OutlinedActionButton(
-            text = stringResource(R.string.battery_optimization),
+            text =
+                if (batteryExempt) {
+                    stringResource(R.string.battery_optimization_already_exempt)
+                } else {
+                    stringResource(R.string.battery_optimization)
+                },
+            enabled = !batteryExempt,
             onClick = { requestBatteryExemption(context) },
         )
 
@@ -104,6 +127,10 @@ fun SettingsScreen(
             text = "${stringResource(R.string.pref_theme)}: ${themeLabel(settings.themeMode)}",
             onClick = { showThemePicker = true },
         )
+        OutlinedActionButton(
+            text = "${stringResource(R.string.pref_language)}: ${currentLanguageLabel()}",
+            onClick = { showLanguagePicker = true },
+        )
 
         SectionHeader(stringResource(R.string.speech_output_header))
 
@@ -116,7 +143,9 @@ fun SettingsScreen(
 
         if (settings.speechMode == SpeechMode.Tts) {
             OutlinedActionButton(
-                text = stringResource(R.string.tts_engine),
+                text =
+                    "${stringResource(R.string.tts_engine)}: " +
+                        ttsEngineLabel(viewModel.ttsEngines, settings.ttsEngine),
                 onClick = { showEnginePicker = true },
             )
             SwitchRow(
@@ -149,10 +178,8 @@ fun SettingsScreen(
             }
         }
 
-        OutlinedActionButton(
-            text = "${stringResource(R.string.pref_language)}: ${currentLanguageLabel()}",
-            onClick = { showLanguagePicker = true },
-        )
+        SectionHeader(stringResource(R.string.configuration_header))
+
         OutlinedActionButton(
             text = stringResource(R.string.export_config),
             onClick = { exportLauncher.launch(EXPORT_FILE_NAME) },
@@ -295,6 +322,18 @@ private fun LanguagePickerDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
+private fun systemGrantedState(read: () -> Boolean): Boolean {
+    var granted by remember { mutableStateOf(read()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = read() }
+    return granted
+}
+
+@Composable
+private fun ttsEngineLabel(engines: List<TtsEngine>, packageName: String?): String =
+    engines.firstOrNull { it.packageName == packageName }?.label
+        ?: stringResource(R.string.tts_engine_default)
+
+@Composable
 private fun speechModeLabel(mode: SpeechMode): String =
     when (mode) {
         SpeechMode.Tts -> stringResource(R.string.speech_mode_tts)
@@ -327,14 +366,13 @@ private fun supportedLocaleTags(context: Context): List<String> =
             .distinct()
     }
 
+private fun isIgnoringBatteryOptimizations(context: Context): Boolean =
+    context
+        .getSystemService(PowerManager::class.java)
+        .isIgnoringBatteryOptimizations(context.packageName)
+
 @SuppressLint("BatteryLife")
 private fun requestBatteryExemption(context: Context) {
-    val powerManager = context.getSystemService(PowerManager::class.java)
-    if (powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
-        Toast.makeText(context, R.string.battery_optimization_already_exempt, Toast.LENGTH_SHORT)
-            .show()
-        return
-    }
     context.startActivity(
         Intent(
             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,

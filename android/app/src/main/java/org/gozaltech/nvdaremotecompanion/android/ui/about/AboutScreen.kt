@@ -24,7 +24,8 @@ import org.koin.compose.koinInject
 
 private const val GITHUB_URL = "https://github.com/gozaltech/NVDARemoteCompanion"
 private const val ISSUES_URL = "https://github.com/gozaltech/NVDARemoteCompanion/issues"
-private const val TELEGRAM_URL = "https://t.me/gozaltech"
+private const val TELEGRAM_APP_URL = "tg://resolve?domain=gozaltech"
+private const val TELEGRAM_WEB_URL = "https://t.me/gozaltech"
 private const val DONATE_URL = "https://paypal.me/gozaltech"
 
 @Composable
@@ -56,7 +57,9 @@ fun AboutScreen(
         )
         OutlinedActionButton(
             text = stringResource(R.string.about_contact),
-            onClick = { openUrl(TELEGRAM_URL) },
+            onClick = {
+                runCatching { openUrl(TELEGRAM_APP_URL) }.onFailure { openUrl(TELEGRAM_WEB_URL) }
+            },
         )
         OutlinedActionButton(
             text = stringResource(R.string.about_report_issue),
