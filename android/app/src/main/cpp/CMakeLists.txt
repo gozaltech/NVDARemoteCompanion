@@ -71,3 +71,17 @@ target_compile_definitions(nvdaremote PRIVATE
     JSON_DIAGNOSTICS=0
     NDEBUG
 )
+
+target_compile_options(nvdaremote PRIVATE
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Os>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-ffunction-sections>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-fdata-sections>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-fvisibility=hidden>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-fvisibility-inlines-hidden>
+)
+
+target_link_options(nvdaremote PRIVATE
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wl,--gc-sections>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wl,--exclude-libs,ALL>
+    $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wl,--as-needed>
+)

@@ -12,9 +12,9 @@
     </plurals>
 
     <string name="status_local">Статус: Локальный</string>
+    <string name="status_active_profile">Активный: %s</string>
     <string name="status_sending_to">Отправка клавиш: %s</string>
 
-    <string name="profiles_list">Профили</string>
     <string name="no_profiles">Профили не настроены. Нажмите «Добавить профиль» для создания.</string>
     <string name="profile_connected">Подключён</string>
     <string name="profile_disconnected">Отключён</string>
@@ -22,10 +22,6 @@
     <string name="profile_sending_keys">Активен — отправка клавиш</string>
 
     <string name="add_profile">Добавить профиль</string>
-    <string name="connect">Подключить</string>
-    <string name="disconnect">Отключить</string>
-    <string name="set_active">Сделать активным</string>
-<string name="edit">Изменить</string>
     <string name="save">Сохранить</string>
     <string name="delete_profile">Удалить профиль</string>
 
@@ -52,6 +48,9 @@
     <string name="accessibility_dialog_title">Включить захват клавиатуры</string>
     <string name="accessibility_dialog_message">NVDA Remote Companion требует включения службы доступности для перехвата нажатий физических клавиш и их перенаправления на удалённый ПК. На следующем экране найдите «NVDA Remote Companion» и включите службу.</string>
     <string name="open_settings">Открыть настройки</string>
+    <string name="keyboard_capture_limited_title">Захват клавиатуры ограничен</string>
+    <string name="keyboard_capture_limited_message">Служба специальных возможностей не включена, поэтому клавиши передаются только когда приложение открыто и активно. Включите её, чтобы передавать клавиши из любого приложения.</string>
+    <string name="continue_anyway">Всё равно продолжить</string>
 
     <string name="tab_profiles">Профили</string>
     <string name="tab_settings">Настройки</string>
@@ -60,6 +59,12 @@
     <string name="pref_autostart">Запускать службу при загрузке устройства</string>
     <string name="pref_auto_connect">Автоподключение профилей при запуске службы</string>
     <string name="pref_accessibility_stream">Использовать поток доступности для TTS</string>
+
+    <string name="appearance_header">Внешний вид</string>
+    <string name="pref_theme">Тема</string>
+    <string name="theme_system">Как в системе</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
 
     <string name="speech_output_header">Вывод речи</string>
     <string name="speech_mode_tts">Синтез речи</string>
@@ -85,12 +90,12 @@
     <string name="export_success">Конфигурация экспортирована</string>
     <string name="export_failed">Ошибка экспорта</string>
     <string name="import_success">Конфигурация импортирована</string>
+    <string name="import_no_new_profiles">Нет новых профилей для импорта</string>
     <string name="import_failed">Ошибка импорта: неверный или нечитаемый файл</string>
 
     <string name="error_loading_profile">Не удалось загрузить профиль</string>
     <string name="error_saving_profile">Не удалось сохранить профиль</string>
     <string name="error_host_key_required">Адрес сервера и ключ обязательны к заполнению</string>
-    <string name="error_connect_failed">Не удалось подключиться к %s</string>
     <string name="error_connect_failed_generic">Не удалось подключиться</string>
 
     <string name="about_description">NVDA Remote Companion позволяет управлять удалённым компьютером с программой экранного доступа NVDA с вашего Android-устройства. Приложение перенаправляет ввод с клавиатуры и передаёт речь и звуки по защищённому соединению.</string>
@@ -105,7 +110,6 @@
     <string name="update_checking">Проверка обновлений…</string>
     <string name="update_up_to_date">У вас установлена последняя версия.</string>
     <string name="update_available_title">Доступно обновление</string>
-    <string name="update_available">Доступно обновление: v%s</string>
     <string name="update_version_line">Текущая: %1$s  →  Новая: %2$s</string>
     <string name="update_changelog">Что нового</string>
     <string name="update_no_changelog">Примечания к выпуску отсутствуют.</string>
