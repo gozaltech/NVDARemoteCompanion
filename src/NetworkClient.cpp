@@ -48,14 +48,13 @@ bool NetworkClient::Connect(const std::string& host, int port) {
 
 void NetworkClient::Disconnect() {
     bool expected = false;
-    static std::atomic<bool> disconnectInProgress(false);
-    if (!disconnectInProgress.compare_exchange_strong(expected, true)) {
+    if (!m_disconnectInProgress.compare_exchange_strong(expected, true)) {
         DEBUG_VERBOSE("NETWORK", "Disconnect already in progress, skipping");
         return;
     }
     
     auto disconnectGuard = make_scope_guard([&] {
-        disconnectInProgress.store(false);
+        m_disconnectInProgress.store(false);
     });
     
     DEBUG_INFO("NETWORK", "Starting disconnect sequence");

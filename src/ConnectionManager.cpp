@@ -36,6 +36,9 @@ ConnectionManager::~ConnectionManager() {
         }
         DEBUG_VERBOSE("CONN", "Disconnecting network client");
         m_client->Disconnect();
+        // Workers have stopped; the client may outlive this manager through shared ownership.
+        m_client->SetDisconnectCallback(nullptr);
+        m_client->SetMessageHandler(nullptr);
         DEBUG_VERBOSE("CONN", "Network client disconnected");
     }
     DEBUG_INFO("CONN", "ConnectionManager destructor completed");
