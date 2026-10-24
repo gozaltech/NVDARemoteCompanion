@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -33,8 +34,6 @@ static std::vector<std::unique_ptr<ConnectionManager>> g_managers;
 static ConfigFileData g_config;
 static std::string g_configPath;
 static std::mutex g_managersMutex;
-// Serialize manager lifetime changes, but never take this mutex in callbacks or state queries.
-// Network operations and manager destruction must run without g_managersMutex held.
 static std::mutex g_managerOperationsMutex;
 
 static jclass    g_bridgeClass         = nullptr;
@@ -79,17 +78,34 @@ static ConnectionManager* ManagerAt(int idx) {
     return g_managers[idx].get();
 }
 
+static bool IsManagerConnected(int idx) {
+    const ConnectionManager* manager = ManagerAt(idx);
+    return manager && manager->IsConnected();
+}
+
+static std::unique_ptr<ConnectionManager> TakeManager(int idx) {
+    std::lock_guard<std::mutex> lock(g_managersMutex);
+    if (!ManagerAt(idx)) return nullptr;
+    return std::move(g_managers[idx]);
+}
+
 static void SyncConnectedProfiles() {
     std::lock_guard<std::mutex> lock(g_managersMutex);
     std::vector<int> indices;
     std::vector<std::string> names;
     for (int i = 0; i < static_cast<int>(g_config.profiles.size()); i++) {
-        if (i < static_cast<int>(g_managers.size()) && g_managers[i] && g_managers[i]->IsConnected()) {
+        if (IsManagerConnected(i)) {
             indices.push_back(i);
             names.push_back(g_config.profiles[i].name);
         }
     }
     AppState::SetConnectedProfiles(indices, names);
+}
+
+static void PublishConnectionState(int profileIndex, bool connected) {
+    SyncConnectedProfiles();
+    NotifyConnectionState(profileIndex, connected);
+    if (!connected) NotifyForwardingChanged();
 }
 
 static void ApplyShortcutsFromConfig() {
@@ -102,18 +118,20 @@ static void ApplyShortcutsFromConfig() {
     }
 }
 
-static void ResizeManagers(std::vector<std::unique_ptr<ConnectionManager>>& retired) {
-    // Keep removed managers alive until the caller releases g_managersMutex.
-    while (g_managers.size() > g_config.profiles.size()) {
-        retired.push_back(std::move(g_managers.back()));
-        g_managers.pop_back();
-    }
-    g_managers.resize(g_config.profiles.size());
-}
+template <typename Change>
+static void UpdateConfig(Change&& change) {
+    std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
+    std::vector<std::unique_ptr<ConnectionManager>> retired;
+    std::lock_guard<std::mutex> lock(g_managersMutex);
 
-static void SaveAndResizeManagers(std::vector<std::unique_ptr<ConnectionManager>>& retired) {
-    ConfigFile::Save(g_configPath, g_config);
-    ResizeManagers(retired);
+    if (change()) ConfigFile::Save(g_configPath, g_config);
+
+    const size_t count = g_config.profiles.size();
+    if (g_managers.size() > count) {
+        retired.assign(std::make_move_iterator(g_managers.begin() + count),
+                       std::make_move_iterator(g_managers.end()));
+    }
+    g_managers.resize(count);
 }
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -216,8 +234,6 @@ NVDA_JNI(jboolean, nativeConnect)(
         jint profileIndex) {
 
     std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::unique_ptr<ConnectionManager> previous;
-    std::unique_lock<std::mutex> lock(g_managersMutex);
 
     int idx = static_cast<int>(profileIndex);
     if (!IsValidProfileIdx(idx)) {
@@ -225,11 +241,9 @@ NVDA_JNI(jboolean, nativeConnect)(
         return JNI_FALSE;
     }
 
-    if (g_managers[idx] && g_managers[idx]->IsConnected()) return JNI_TRUE;
+    if (IsManagerConnected(idx)) return JNI_TRUE;
 
-    previous = std::move(g_managers[idx]);
-    lock.unlock();
-    previous.reset();
+    TakeManager(idx);
 
     auto manager = std::make_unique<ConnectionManager>();
 
@@ -239,32 +253,29 @@ NVDA_JNI(jboolean, nativeConnect)(
 
     manager->SetDisconnectCallback([idx]() {
         LOGI("Profile %d disconnected", idx);
-        SyncConnectedProfiles();
-        NotifyConnectionState(idx, false);
-        NotifyForwardingChanged();
+        PublishConnectionState(idx, false);
     });
 
     manager->SetReconnectCallback([idx]() {
         LOGI("Profile %d reconnected", idx);
-        SyncConnectedProfiles();
-        NotifyConnectionState(idx, true);
+        PublishConnectionState(idx, true);
     });
 
     MessageSender::SetNetworkClient(idx, manager->GetClient());
 
     ConnectionManager* current = manager.get();
-    lock.lock();
-    g_managers[idx] = std::move(manager);
-    lock.unlock();
+    {
+        std::lock_guard<std::mutex> lock(g_managersMutex);
+        g_managers[idx] = std::move(manager);
+    }
 
     bool ok = current->EstablishConnection(p.host, p.port, p.key);
     if (ok) {
-        SyncConnectedProfiles();
         LOGI("Profile %d connected to %s", idx, p.host.c_str());
     } else {
         LOGE("Profile %d failed to connect to %s", idx, p.host.c_str());
     }
-    NotifyConnectionState(idx, ok);
+    PublishConnectionState(idx, ok);
 
     return ok ? JNI_TRUE : JNI_FALSE;
 }
@@ -274,18 +285,13 @@ NVDA_JNI(void, nativeDisconnect)(
         jint profileIndex) {
 
     std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::unique_ptr<ConnectionManager> manager;
     int idx = static_cast<int>(profileIndex);
-    {
-        std::lock_guard<std::mutex> lock(g_managersMutex);
-        if (!ManagerAt(idx)) return;
-        manager = std::move(g_managers[idx]);
-    }
+    std::unique_ptr<ConnectionManager> manager = TakeManager(idx);
+    if (!manager) return;
+
     manager->Disconnect();
-    SyncConnectedProfiles();
     LOGI("Profile %d disconnected by request", idx);
-    NotifyConnectionState(idx, false);
-    NotifyForwardingChanged();
+    PublishConnectionState(idx, false);
 }
 
 NVDA_JNI(jboolean, nativeIsConnected)(
@@ -293,9 +299,7 @@ NVDA_JNI(jboolean, nativeIsConnected)(
         jint profileIndex) {
 
     std::lock_guard<std::mutex> lock(g_managersMutex);
-    int idx = static_cast<int>(profileIndex);
-    const ConnectionManager* manager = ManagerAt(idx);
-    return (manager && manager->IsConnected()) ? JNI_TRUE : JNI_FALSE;
+    return IsManagerConnected(static_cast<int>(profileIndex)) ? JNI_TRUE : JNI_FALSE;
 }
 
 NVDA_JNI(jint, nativeGetProfileCount)(
@@ -351,34 +355,29 @@ NVDA_JNI(void, nativeSaveProfile)(
     p.muteOnLocalControl = static_cast<bool>(mute);
     p.autoConnect      = static_cast<bool>(autoConnect);
 
-    std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::vector<std::unique_ptr<ConnectionManager>> retired;
-    std::lock_guard<std::mutex> lock(g_managersMutex);
-    ConfigFile::StripInvalidProfiles(g_config.profiles);
-
     int idx = static_cast<int>(profileIndex);
-    if (IsValidProfileIdx(idx))
-        g_config.profiles[idx] = std::move(p);
-    else
-        g_config.profiles.push_back(std::move(p));
-
-    SaveAndResizeManagers(retired);
-    LOGI("Profile saved — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+    UpdateConfig([&] {
+        ConfigFile::StripInvalidProfiles(g_config.profiles);
+        if (IsValidProfileIdx(idx))
+            g_config.profiles[idx] = std::move(p);
+        else
+            g_config.profiles.push_back(std::move(p));
+        LOGI("Profile saved — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+        return true;
+    });
 }
 
 NVDA_JNI(void, nativeDeleteProfile)(
         JNIEnv*, jobject,
         jint profileIndex) {
 
-    std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::vector<std::unique_ptr<ConnectionManager>> retired;
-    std::lock_guard<std::mutex> lock(g_managersMutex);
     int idx = static_cast<int>(profileIndex);
-    if (!IsValidProfileIdx(idx)) return;
-
-    g_config.profiles.erase(g_config.profiles.begin() + idx);
-    SaveAndResizeManagers(retired);
-    LOGI("Profile deleted — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+    UpdateConfig([idx] {
+        if (!IsValidProfileIdx(idx)) return false;
+        g_config.profiles.erase(g_config.profiles.begin() + idx);
+        LOGI("Profile deleted — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+        return true;
+    });
 }
 
 NVDA_JNI(jint, nativeMergeConfig)(
@@ -387,25 +386,22 @@ NVDA_JNI(jint, nativeMergeConfig)(
 
     ConfigFileData imported = ConfigFile::LoadFromString(JniToString(env, configJson));
 
-    std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::vector<std::unique_ptr<ConnectionManager>> retired;
-    std::lock_guard<std::mutex> lock(g_managersMutex);
     int added = 0;
-    for (const auto& incoming : imported.profiles) {
-        if (incoming.host.empty() || incoming.key.empty()) continue;
-        bool exists = std::any_of(g_config.profiles.begin(), g_config.profiles.end(),
-            [&](const ProfileConfig& e) {
-                return e.host == incoming.host && e.key == incoming.key;
-            });
-        if (!exists) {
-            g_config.profiles.push_back(incoming);
-            ++added;
+    UpdateConfig([&] {
+        for (const auto& incoming : imported.profiles) {
+            if (incoming.host.empty() || incoming.key.empty()) continue;
+            bool exists = std::any_of(g_config.profiles.begin(), g_config.profiles.end(),
+                [&](const ProfileConfig& e) {
+                    return e.host == incoming.host && e.key == incoming.key;
+                });
+            if (!exists) {
+                g_config.profiles.push_back(incoming);
+                ++added;
+            }
         }
-    }
-    if (added > 0) {
-        SaveAndResizeManagers(retired);
-        LOGI("Merged config — added %d profile(s)", added);
-    }
+        return added > 0;
+    });
+    if (added > 0) LOGI("Merged config — added %d profile(s)", added);
     return static_cast<jint>(added);
 }
 
@@ -413,17 +409,16 @@ NVDA_JNI(void, nativeLoadConfig)(
         JNIEnv* env, jobject,
         jstring configJson) {
 
-    std::lock_guard<std::mutex> operationLock(g_managerOperationsMutex);
-    std::vector<std::unique_ptr<ConnectionManager>> retired;
     std::string json = JniToString(env, configJson);
-    {
-        std::ofstream out(g_configPath);
-        if (out.is_open()) out << json;
-    }
-    std::lock_guard<std::mutex> lock(g_managersMutex);
-    g_config = ConfigFile::Load(g_configPath);
-    ResizeManagers(retired);
-    LOGI("Config reloaded — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+    UpdateConfig([&] {
+        {
+            std::ofstream out(g_configPath);
+            if (out.is_open()) out << json;
+        }
+        g_config = ConfigFile::Load(g_configPath);
+        LOGI("Config reloaded — %d profile(s)", static_cast<int>(g_config.profiles.size()));
+        return false;
+    });
 }
 
 NVDA_JNI(jstring, nativeGetConfigJson)(

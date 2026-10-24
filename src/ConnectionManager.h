@@ -22,7 +22,7 @@ class ConnectionManager {
 private:
     std::shared_ptr<NetworkClient> m_client;
     ConnectionParams m_params;
-    std::atomic<bool> m_protocolHandshakeComplete;
+    std::atomic<bool> m_protocolHandshakeComplete{false};
     std::function<void()> m_disconnectCallback;
     std::function<void()> m_reconnectCallback;
     bool m_speechEnabled = false;
