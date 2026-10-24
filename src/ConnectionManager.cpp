@@ -17,7 +17,7 @@ extern std::atomic<bool> g_shutdown;
 
 
 
-ConnectionManager::ConnectionManager() : m_protocolHandshakeComplete(false) {
+ConnectionManager::ConnectionManager() {
     m_client = std::make_shared<NetworkClient>();
 }
 
@@ -36,6 +36,8 @@ ConnectionManager::~ConnectionManager() {
         }
         DEBUG_VERBOSE("CONN", "Disconnecting network client");
         m_client->Disconnect();
+        m_client->SetDisconnectCallback(nullptr);
+        m_client->SetMessageHandler(nullptr);
         DEBUG_VERBOSE("CONN", "Network client disconnected");
     }
     DEBUG_INFO("CONN", "ConnectionManager destructor completed");

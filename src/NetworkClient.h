@@ -18,6 +18,7 @@ private:
     ConnectionState::StateManager m_connectionState;
     std::function<void(const std::string&)> m_messageHandler;
     std::function<void()> m_disconnectCallback;
+    std::atomic<bool> m_disconnectInProgress{false};
 
     std::queue<std::string> m_sendQueue;
     std::mutex m_sendMutex;
